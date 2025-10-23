@@ -1,0 +1,17 @@
+<h2>時間割一覧</h2>
+{% for 曜日, entries in grouped.items() %}
+  <h3>{{ 曜日 }}曜日</h3>
+  <table border="1">
+    <tr>
+      <th>時限</th><th>授業名</th><th>担当教員</th><th>教室</th>
+    </tr>
+    {% for entry in entries %}
+    <tr>
+      <td>{{ entry[0] }}限</td>
+      <td>{{ entry[1] }}</td>
+      <td>{{ entry[2] }}</td>
+      <td>{{ entry[3] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% endfor %}

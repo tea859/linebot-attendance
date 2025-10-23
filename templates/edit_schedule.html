@@ -1,0 +1,27 @@
+<h2>時間割変更</h2>
+<form method="POST">
+  <label>変更対象:</label>
+  <select name="schedule_id">
+    {% for s in schedules %}
+      <option value="{{ s[0] }}">{{ s[1] }}（{{ s[2] }}曜{{ s[3] }}限）</option>
+    {% endfor %}
+  </select><br>
+
+  <label>新しい曜日:</label>
+  <select name="day">
+    <option value="月">月</option>
+    <option value="火">火</option>
+    <option value="水">水</option>
+    <option value="木">木</option>
+    <option value="金">金</option>
+  </select><br>
+
+  <label>新しい時限:</label>
+  <select name="period">
+    {% for i in range(1, 6) %}
+      <option value="{{ i }}">{{ i }}限</option>
+    {% endfor %}
+  </select><br>
+
+  <button type="submit">変更</button>
+</form>

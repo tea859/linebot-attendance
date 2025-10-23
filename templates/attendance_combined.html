@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>出席・在室ダッシュボード</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<h1>出席・在室ダッシュボード</h1>
+
+<div class="section">
+  <h2>出席登録</h2>
+  <form method="POST">
+    <label>学生:</label>
+    <select name="student_id" required>
+      {% for s in students %}
+        <option value="{{ s[0] }}">{{ s[1] }}</option>
+      {% endfor %}
+    </select><br>
+    <label>授業:</label>
+    <select name="class_id" required>
+      {% for c in classes %}
+        <option value="{{ c[0] }}">{{ c[1] }}</option>
+      {% endfor %}
+    </select><br>
+    <label>時限:</label>
+    <select name="period" required>
+      <option value="1">1限</option>
+      <option value="2">2限</option>
+      <option value="3">3限</option>
+      <option value="4">4限</option>
+    </select><br>
+    <button type="submit">登録</button>
+  </form>
+</div>
+
+<div class="section">
+  <h2>室内センサーデータ（リアルタイム）</h2>
+  <div id="sensor-data">
+    <p>読み込み中...</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>出席履歴</h2>
+  <table>
+    <tr><th>学生名</th><th>授業ID</th><th>時限</th><th>時刻</th><th>状態</th></tr>
+    {% for r in attendance %}
+      <tr>
+        <td>{{ r[0] }}</td>
+        <td>{{ r[1] }}</td>
+        <td>{{ r[4] }}限</td>
+        <td>{{ r[2] }}</td>
+        <td class="status-{{ r[3] }}">{{ r[3] }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="section">
+  <h2>全学生の在室状態（リアルタイム）</h2>
+  <table id="status-table">
+    <thead>
+      <tr><th>学生名</th><th>状態</th><th>教室</th><th>入室時刻</th><th>在室時間</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script src="/static/script.js?v=1.01"></script>
+</body>
+</html>
