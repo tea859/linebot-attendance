@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv # ⬅️ これを追加
-from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime
 from collections import OrderedDict
 from urllib.parse import quote
@@ -1216,59 +1216,61 @@ def send_schedule_email_route():
 
 # --- 11. LINE Bot Webhook (SQLAlchemy版) ---
 
-@app.route("/callback", methods=['POST'])
-def callback():
-    signature = request.headers['X-Line-Signature']
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        print("Invalid signature. Please check your channel secret.")
-        abort(400)
-    return 'OK'
+if handler:
+    @app.route("/callback", methods=['POST'])
+    def callback():
+        """LINEからのWebhookを受け取る"""
+        signature = request.headers['X-Line-Signature']
+        body = request.get_data(as_text=True)
+        app.logger.info("Request body: " + body)
+        try:
+            handler.handle(body, signature)
+        except InvalidSignatureError:
+            print("Invalid signature. Please check your channel secret.")
+            abort(400) # ⬅️ abort を import する必要があります
+        return 'OK'
 
-@handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
-    """LINEのテキストメッセージを処理する"""
-    received_text = event.message.text
-    user_id = event.source.user_id
-    reply_message = "" 
+    @handler.add(MessageEvent, message=TextMessage)
+    def handle_message(event):
+        """LINEのテキストメッセージを処理する"""
+        received_text = event.message.text
+        user_id = event.source.user_id
+        reply_message = "" 
 
-    if received_text == "在室状況":
-        # api_status() と同じロジックを呼び出す
-        all_students = 学生.query.all()
-        active_sessions = db.session.query(
-            在室履歴.学生ID, 教室.教室名
-        ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
-         .filter(在室履歴.退室時刻 == None).all()
-        
-        active_map = {sid: (room_name or '教室不明') for sid, room_name in active_sessions}
-        
-        in_room = []
-        for s in all_students:
-            if s.学生ID in active_map:
-                in_room.append(f"・{s.学生名} ({active_map[s.学生ID]})")
-        
-        if in_room:
-            reply_message = "現在の在室者:\n" + "\n".join(in_room)
-        else:
-            reply_message = "現在、在室者はいません。"
+        if received_text == "在室状況":
+            # (ロジックは変更なし)
+            all_students = 学生.query.all()
+            active_sessions = db.session.query(
+                在室履歴.学生ID, 教室.教室名
+            ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
+             .filter(在室履歴.退室時刻 == None).all()
             
-    elif received_text == "気温":
-        if sensor_data:
-             latest = sensor_data[-1]
-             reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+            active_map = {sid: (room_name or '教室不明') for sid, room_name in active_sessions}
+            
+            in_room = []
+            for s in all_students:
+                if s.学生ID in active_map:
+                    in_room.append(f"・{s.学生名} ({active_map[s.学生ID]})")
+            
+            if in_room:
+                reply_message = "現在の在室者:\n" + "\n".join(in_room)
+            else:
+                reply_message = "現在、在室者はいません。"
+                
+        elif received_text == "気温":
+            if sensor_data:
+                 latest = sensor_data[-1]
+                 reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+            else:
+                 reply_message = "センサーデータがまだありません。"
+                 
         else:
-             reply_message = "センサーデータがまだありません。"
-             
-    else:
-        reply_message = f"「{received_text}」を受け取りました。"
+            reply_message = f"「{received_text}」を受け取りました。"
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_message)
-    )
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_message)
+        )
 
 # --- 12. 実行 ---
 
