@@ -293,9 +293,6 @@ def init_db_command():
         
     # --- データベース初期化完了 ---
 
-@app.cli.command('init-db')
-def init_db_command():
-    # ... (上記のコードに置き換え)
 
 @login_manager.user_loader
 def load_user(user_id):
