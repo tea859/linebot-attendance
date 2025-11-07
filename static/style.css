@@ -1,0 +1,107 @@
+/* 全体の基本スタイル */
+body {
+  font-family: "Segoe UI", sans-serif;
+  background-color: #f5f5f5;
+  margin: 20px;
+}
+
+/* タイトル */
+h1 {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+/* セクションのカード風スタイル */
+.section {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.section h2 {
+  margin-top: 0;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 5px;
+}
+
+/* 出席登録フォーム */
+form label {
+  display: inline-block;
+  width: 80px;
+  font-weight: bold;
+}
+
+select {
+  width: 200px;
+  padding: 5px;
+  margin-bottom: 10px;
+}
+
+button {
+  padding: 8px 16px;
+  background-color: #0078D4;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #005a9e;
+}
+
+/* テーブルスタイル */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+th {
+  background-color: #0078D4;
+  color: white;
+  position: sticky;
+  top: 0;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: left;
+}
+
+/* 状態別色分け */
+.status-在室 {
+  background-color: #e6f4e6;
+  color: #006400;
+  font-weight: bold;
+}
+
+.status-退出 {
+  background-color: #fbeaea;
+  color: #8b0000;
+  font-weight: bold;
+}
+
+.status-出席 {
+  background-color: #e6f4e6;
+  color: #006400;
+  font-weight: bold;
+}
+
+/* センサーデータ表示エリア */
+#sensor-data {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#sensor-data ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+#sensor-data li {
+  margin-bottom: 4px;
+}

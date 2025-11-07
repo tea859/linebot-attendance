@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>時間割表示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .grid-container {
+            /* ヘッダー(50px) + 5列 */
+            grid-template-columns: 50px repeat(5, minmax(0, 1fr));
+        }
+        .time-slot {
+            /* セルの高さを固定 */
+            height: 110px; 
+        }
+        /* 授業情報のスタイル */
+        .class-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            text-align: center;
+            line-height: 1.4;
+        }
+        .subject-name {
+            font-weight: 600;
+            color: #1f2937;
+        }
+        .details {
+            font-size: 0.8em;
+            color: #4b5563;
+        }
+        
+        /* ★★★ 今日の曜日を強調するスタイル ★★★ */
+        .today-header {
+            background-color: #dbeafe !important;
+            color: #1d4ed8 !important;
+            border-bottom: 3px solid #3b82f6;
+        }
+        .today-cell {
+            /* 今日のセルは薄い青でハイライト */
+            background-color: #eff6ff !important; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-purple-500 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">時間割表示</h1>
+            <a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">← メインメニューに戻る</a>
+        </header>
+
+        <nav class="flex space-x-4 mb-6" aria-label="Tabs">
+            {% for kiki_num in kikis %}
+            <a href="/schedule?kiki={{ kiki_num }}" 
+               class="px-5 py-2 font-medium text-lg rounded-t-xl transition duration-150 
+               {% if kiki_num == selected_kiki %}bg-white text-purple-600 border-b-4 border-purple-600 shadow-md{% else %}text-gray-500 hover:text-purple-700 hover:bg-gray-50{% endif %}">
+                第{{ kiki_num }}期
+            </a>
+            {% endfor %}
+        </nav>
+
+        <div class="bg-white p-6 rounded-xl shadow-xl">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">第{{ selected_kiki }}期 時間割</h2>
+            
+            <div class="grid grid-container border border-gray-300 rounded-lg overflow-hidden text-center">
+                
+                <div class="bg-gray-200 font-bold p-3 border-r border-gray-300">時限</div>
+                {% for day in 曜日順 %}
+                <div class="bg-gray-200 font-bold p-3 border-r border-gray-300 {% if day == today_yobi %}today-header{% endif %}">
+                    {{ day }}
+                </div>
+                {% endfor %}
+                
+                {% for period in 時限一覧 %}
+                    <div class="bg-gray-100 font-bold time-slot flex items-center justify-center border-r border-gray-300 border-t">
+                        {% if period == 5 %}
+                            備考
+                        {% else %}
+                            {{ period }}
+                        {% endif %}
+                    </div>
+                    
+                    {% for day in 曜日順 %}
+                        {% set slot = schedule_grid[period][day] %}
+                        <div class="time-slot p-1 border-r border-gray-300 border-t 
+                             {% if day == today_yobi %}today-cell{% endif %}
+                             
+                             {% if slot.is_empty %}bg-gray-50 text-gray-400 italic
+                             {% elif period == 5 %}bg-yellow-100
+                             {% else %}bg-gray-50 hover:bg-gray-100  {% endif %}">
+                            
+                            <div class="class-info">
+                                {% if slot.is_empty %}
+                                    <span>休憩/空欄</span>
+                                {% elif period == 5 %}
+                                    <span class="details">{{ slot.remark if slot.remark else 'なし' }}</span>
+                                {% else %}
+                                    <span class="subject-name">{{ slot.subject }}</span>
+                                    <span class="details">{{ slot.teacher }}</span>
+                                    <span class="details">{{ slot.room }}</span>
+                                {% endif %}
+                            </div>
+
+                        </div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

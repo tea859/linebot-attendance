@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出席管理システム - ダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* カスタムスタイル */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .feature-card {
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            transform: translateY(0);
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        .student-item {
+            transition: background-color 0.15s;
+        }
+        .student-item:hover {
+            background-color: #eef5ff;
+        }
+        
+        /* ★★★ script.jsで使うスタイル ★★★ */
+        /* テーブルの sticky header のため */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+        }
+        /* 在室・退出のバッジ */
+        .status-badge {
+            display: inline-flex;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1.25;
+            border-radius: 9999px;
+        }
+        .status-在室 {
+            background-color: #d1fae5; /* green-100 */
+            color: #065f46; /* green-800 */
+        }
+        .status-退出 {
+            background-color: #fee2e2; /* red-100 */
+            color: #991b1b; /* red-800 */
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="p-4 mb-6 rounded-lg 
+                    {% if category == 'success' %} bg-green-100 text-green-700 border border-green-400
+                    {% elif category == 'error' %} bg-red-100 text-red-700 border border-red-400
+                    {% else %} bg-blue-100 text-blue-700 border border-blue-400
+                    {% endif %}" role="alert">
+                    <p>{{ message }}</p>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <header class="bg-white rounded-xl shadow-lg p-6 mb-8 border-b-4 border-blue-500 flex justify-between items-center">
+            <div class="flex-shrink">
+                <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">
+                    出席管理システム
+                </h1>
+                <p class="text-gray-500 mt-1">すべての機能と学生情報にここからアクセスできます。</p>
+            </div>
+            
+            <div>
+                {% if current_user.is_authenticated %}
+                    <div class="text-right mb-2">
+                        <span class="text-gray-600 text-sm">ようこそ, {{ current_user.username }} さん</span>
+                        <a href="/logout" 
+                           class="ml-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition duration-150">
+                            ログアウト
+                        </a>
+                    </div>
+                    
+                    <form method="POST" action="/restore_schedule" 
+                          onsubmit="return confirm('本当に時間割を初期のデフォルト状態に戻しますか？');"
+                          class="mt-2 text-right">
+                        <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition duration-150 whitespace-nowrap">
+                            時間割を元に戻す
+                        </button>
+                    </form>
+
+                {% else %}
+                    <a href="/login" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700">
+                        管理者ログイン
+                    </a>
+                {% endif %}
+            </div>
+        </header>
+
+        <h2 class="text-2xl font-bold text-gray-700 mb-4">メイン機能</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            
+            {% for link in links %}
+            <a href="{{ link.url }}" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500 flex flex-col items-center text-center hover:border-blue-700">
+                <div class="text-4xl mb-3 text-blue-600">
+                    {% if "記録" in link.name %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                    {% elif "時間割表示" in link.name %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h.01M15 12h.01M12 16h.01M9 16h.01M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m8 2H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
+                    {% elif "編集" in link.name or "管理" in link.name %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H8v-3.828l7.586-7.586z"/></svg>
+                    {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    {% endif %}
+                </div>
+                <span class="text-lg font-semibold text-gray-800">{{ link.name }}</span>
+            </a>
+            {% endfor %}
+            
+            {% if current_user.is_authenticated %}
+            <a href="/send_schedule_email" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500 flex flex-col items-center text-center hover:border-red-700">
+                <div class="text-4xl mb-3 text-red-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-2 4v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7"/></svg>
+                </div>
+                <span class="text-lg font-semibold text-gray-800">時間割メール送信</span>
+            </a>
+            {% endif %}
+
+            {% if current_user.is_authenticated %}
+            <a href="/report_summary" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center text-center hover:border-indigo-700">
+                <div class="text-4xl mb-3 text-indigo-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                </div>
+                <span class="text-lg font-semibold text-gray-800">授業別出席管理表</span>
+            </a>
+            {% endif %}
+	    </div>
+
+        <h2 class="text-2xl font-bold text-gray-700 mb-4">学生別出席サマリー</h2>
+        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+            
+            <p class="text-gray-500 mb-4">
+                サマリーを確認したい学生を選択してください (デフォルト: 第1期を表示)。
+            </p>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 student-list max-h-[400px] overflow-y-auto p-2 border border-gray-200 rounded-lg">
+                {% for student_id, student_name in students %}
+                <a href="/my_attendance?student_id={{ student_id }}&kiki=1" class="student-item block p-3 rounded-lg text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 hover:bg-blue-50 hover:text-blue-700 transition duration-150">
+                    <span class="block truncate">{{ student_name }}</span>
+                    <span class="text-xs text-gray-400">ID: {{ student_id }}</span>
+                </a>
+                {% endfor %}
+                
+                {% if not students %}
+                <p class="col-span-full text-center text-red-500 p-4">?? 学生データがDBにありません。</p>
+                {% endif %}
+            </div>
+        </div>
+	<div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">現在の環境</h2>
+            
+            <div id="sensor-data">
+                <p class="text-gray-500">センサーデータを読み込み中...</p>
+            </div>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-700 mb-4 mt-12">リアルタイム在室状況</h2>
+        <h2 class="text-2xl font-bold text-gray-700 mb-4 mt-12">リアルタイム在室状況</h2>
+        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div class="overflow-y-auto max-h-[500px]">
+                <table id="status-table" class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50 sticky-header">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生名</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状態</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">教室</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入室時刻</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">滞在時間</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <tr>
+                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                在室状況を読み込み中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div> <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+</body>
+</html>

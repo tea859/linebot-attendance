@@ -1,0 +1,54 @@
+<h1>時間割登録</h1>
+<form method="POST" action="/add_class">
+  <label>授業名:</label>
+  <input type="text" name="name" required><br>
+
+  <label>担当教員:</label>
+  <input type="text" name="teacher" required><br>
+
+  <label>曜日:</label>
+  <select name="day_of_week">
+    {% for day in ["月", "火", "水", "木", "金"] %}
+      <option value="{{ day }}">{{ day }}</option>
+    {% endfor %}
+  </select><br>
+
+  <label>時限:</label>
+  <select name="period">
+    {% for p in range(1, 5) %}
+      <option value="{{ p }}">{{ p }}限</option>
+    {% endfor %}
+  </select><br>
+
+  <label>教室:</label>
+  <input type="text" name="room"><br>
+
+  <button type="submit">登録</button>
+</form>
+<h2>時間割登録</h2>
+<form method="POST">
+  <label>授業:</label>
+  <select name="class_id">
+    {% for c in classes %}
+      <option value="{{ c[0] }}">{{ c[1] }}</option>
+    {% endfor %}
+  </select><br>
+
+  <label>曜日:</label>
+  <select name="day">
+    <option value="月">月</option>
+    <option value="火">火</option>
+    <option value="水">水</option>
+    <option value="木">木</option>
+    <option value="金">金</option>
+  </select><br>
+
+  <label>時限:</label>
+  <select name="period">
+    {% for i in range(1, 6) %}
+      <option value="{{ i }}">{{ i }}限</option>
+    {% endfor %}
+  </select><br>
+
+  <button type="submit">登録</button>
+</form>
