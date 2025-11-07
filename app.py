@@ -47,12 +47,20 @@ db = SQLAlchemy(app)
 # --- ▼▼▼ ここにLINE Bot設定を追加 ▼▼▼ ---
 # (LINE Developersコンソールから取得したキーを設定)
 # ⚠️ 環境変数（os.environ.get）から読み込むことを強く推奨します
+# --- ▼▼▼ LINE Bot設定 (修正) ▼▼▼ ---
 YOUR_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 YOUR_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 
-line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler(YOUR_CHANNEL_SECRET)
-# --- ▲▲▲ 追加ここまで ▲▲▲ ---
+# (キーが存在する場合のみAPIを初期化する)
+if YOUR_CHANNEL_ACCESS_TOKEN and YOUR_CHANNEL_SECRET:
+    line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
+    handler = WebhookHandler(YOUR_CHANNEL_SECRET)
+else:
+    # (init-db 実行時など、キーがない場合はダミーで初期化)
+    line_bot_api = None 
+    handler = None
+    print("【WARNING】LINE Botのトークンが設定されていません。init-db を実行中...?")
+# --- ▲▲▲ 修正ここまで ▲▲▲ ---
 
 # --- 2. Flask-Login と Mail の設定 ---
 app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
