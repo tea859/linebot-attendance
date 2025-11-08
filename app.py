@@ -1689,7 +1689,13 @@ if handler:
             QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
             QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
             QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
-            QuickReplyButton(action=MessageAction(label="退室する", text="退室")), # 在室記録を終わらせる
+            
+            # 👇 新しく追加する一時退出のボタン
+            QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
+            QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
+            
+            # 👇 最終退室のボタン（既存の「退室」ボタンを明確化）
+            QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
         ])
 
         line_bot_api.reply_message(
