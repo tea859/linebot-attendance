@@ -192,6 +192,21 @@ class 時間割_デフォルト(db.Model):
     備考 = db.Column(db.String)
     __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_default_gaku_yobi_jigen_uc'),)
 
+class LineUser(db.Model):
+    __tablename__ = 'line_user'
+    
+    # LINEのユーザーIDは非常に長い文字列（約33文字）
+    line_user_id = db.Column(db.String(50), primary_key=True) 
+    
+    # 学生テーブルと紐づける
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), unique=True, nullable=False)
+    
+    # リレーションシップの定義（学生IDから学生情報を参照できるようにする）
+    student = relationship("学生", backref="line_user", uselist=False)
+
+    def __repr__(self):
+        return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
+
 @app.cli.command('init-db')
 def init_db_command():
     """Flask CLIコマンド: flask init-db"""
@@ -492,17 +507,18 @@ def get_schedule_for_line(target_date):
     return "\n".join(output)
 
 def get_attendance_summary_for_line(line_user_id):
-    """LINEユーザーIDに対応する学生の出席サマリーを返す (簡略版)"""
-    # ⚠️ データベースにLINEユーザーIDと学生IDの紐付けテーブルが必要です。
-    # 現在のモデルに紐付けテーブルがないため、ここでは仮に学生ID=222521301のデータを使用します。
-    # 実際には、学生が最初にBotを利用する際にIDを登録する機能が必要です。
+    """LINEユーザーIDに対応する学生の出席サマリーを返す"""
     
-    student_id = 222521301 # デバッグ用の仮の学生ID
+    student_id = get_student_id_from_line_user(line_user_id) # ⬅️ 紐付けテーブルから取得！
     
-    # ... (レポート機能のロジックを流用し、学生IDで出席記録を集計してテキストで返す)
-    # ... (ここでは、詳細な集計ロジックは省略し、簡潔なメッセージを返します)
+    if student_id is None:
+        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
     
-    return f"【学生ID:{student_id}】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
+    # 紐づいた学生情報と出席レポートロジックの実行
+    student = 学生.query.get(student_id)
+    # ... (レポート機能のロジックを流用し、student_idで出席記録を集計してテキストで返す)
+    
+    return f"【学生ID:{student_id} / {student.学生名}さん】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
 
 def process_exit_record(line_user_id):
     """学生の在室履歴を終了させる"""
@@ -529,6 +545,11 @@ def 判定(時限, 登録時刻):
     if 経過 <= 0: return "出席"
     elif 経過 <= 20: return "遅刻"
     else: return "欠席"
+
+def get_student_id_from_line_user(line_user_id):
+    """LINE User IDから学生IDを取得する"""
+    mapping = LineUser.query.filter_by(line_user_id=line_user_id).first()
+    return mapping.student_id if mapping else None
 
 sensor_data = [] # センサーデータ（ESP32）用
 
@@ -1555,8 +1576,33 @@ if handler:
         """LINEのテキストメッセージを処理する"""
         received_text = event.message.text
         user_id = event.source.user_id
-        reply_message = "" 
+        reply_message = ""
+        now = datetime.now()
 
+        # --- 1. アカウント登録処理 ---
+        if received_text.startswith("登録:"):
+            try:
+                input_student_id = int(received_text.split(":")[1].strip())
+            except (IndexError, ValueError):
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 登録形式が正しくありません。「登録:学生ID」の形式で入力してください。"))
+
+            student = 学生.query.get(input_student_id)
+            if not student:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。"))
+            
+            # 既存の紐付けをチェック
+            existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
+            if existing_mapping:
+                existing_mapping.student_id = input_student_id
+                db.session.commit()
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 登録情報を更新しました。\nあなたのID ({input_student_id}) が紐づきました。"))
+
+            # 新しい紐付けを登録
+            new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
+            db.session.add(new_mapping)
+            db.session.commit()
+            return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
+    
         if received_text == "今日の時間割" or received_text == "明日の時間割":
         # 曜日判定（今日は0、明日は1）
             days_ahead = 0 if received_text == "今日の時間割" else 1
