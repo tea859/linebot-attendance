@@ -211,26 +211,12 @@ class LineUser(db.Model):
 
 @app.cli.command('init-db')
 def init_db_command():
-    """Flask CLIコマンド: flask init-db"""
-    print("データベーステーブルを作成中...")
-    db.create_all()
-    print("データベース初期化完了。")
     
     # --- データ投入ロジック ---
     from datetime import time 
     from sqlalchemy.exc import IntegrityError
     
     with app.app_context():
-        # 🚨 [重要] 在室履歴テーブルを削除し、新しい構造で再作成するためのコード 🚨
-        try:
-            # 1. 既存の在室履歴テーブルを削除 (データは消えます)
-            db.session.execute(text('DROP TABLE IF EXISTS "在室履歴" CASCADE'))
-            db.session.commit()
-            print("【INFO】古い在室履歴テーブルを削除しました。")
-        except Exception as e:
-            # エラーが出ても初期化を止めない
-            print(f"【WARNING】在室履歴の削除中にエラーが発生しました: {e}")
-            db.session.rollback()
             
         # 2. すべてのテーブルを作成/再作成（在室履歴には「備考」が追加される）
         db.create_all()
@@ -820,10 +806,13 @@ def api_status():
     result = []
     for s in all_students:
         if s.学生ID in active_map:
-            room, time, dur = active_map.pop(s.学生ID) # 重複表示防止
+            session_data = active_map.pop(s.学生ID)
             result.append({
-                "name": s.学生名, "status": "在室",
-                "room": room, "entry": time, "duration": dur
+                "name": s.学生名, 
+                "status": session_data["status"], # ⬅️ status を取得
+                "room": session_data["room"], 
+                "entry": session_data["entry"], 
+                "duration": session_data["duration"]
             })
         else:
             result.append({
