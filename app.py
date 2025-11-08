@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv # ⬅️ これを追加
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import OrderedDict
 from urllib.parse import quote
 # ... (Flask, datetime, csv などのimport) ...
@@ -22,6 +22,7 @@ from linebot.exceptions import (
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
 )
+from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
 # --- ▼ SQLAlchemy (B案) に変更 ▼ ---
 from flask_sqlalchemy import SQLAlchemy
@@ -450,14 +451,72 @@ def initialize_default_schedule():
     except Exception as e:
         print(f"【WARNING】デフォルト時間割の初期化に失敗しました: {e}")
 
-# @app.cli.command('init-db')
-# def init_db_command():
-#     """Flask CLIコマンド: flask init-db"""
-#     print("データベーステーブルを作成中...")
-#     db.create_all()
-#     print("データベース初期化完了。")
-#     print("デフォルト時間割のバックアップを作成中...")
-#     initialize_default_schedule()
+def get_schedule_for_line(target_date):
+    """指定された日付の時間割をテキスト形式で返す"""
+    
+    # 曜日コード (0=月, 1=火, ...)
+    yobi_code = target_date.weekday() 
+    yobi_str = YOBI_MAP_REVERSE.get(yobi_code)
+    
+    # 授業計画から期と曜日コードを取得
+    date_str = target_date.strftime("%Y/%m/%d")
+    plan_row = 授業計画.query.get(date_str)
+    
+    if plan_row:
+        kiki = str(plan_row.期)
+        yobi_to_use = YOBI_MAP_REVERSE.get(plan_row.授業曜日) # 授業計画に指定された曜日コード
+    else:
+        kiki = get_current_kiki() # 授業計画がない場合は現在の期を使用
+        yobi_to_use = yobi_str
+    
+    # 時間割データの取得
+    schedule_rows = db.session.query(
+        時間割, 授業.授業科目名, 授業.担当教員
+    ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
+     .filter(時間割.学期 == kiki, 時間割.曜日 == yobi_to_use)\
+     .order_by(時間割.時限).all()
+     
+    if not schedule_rows:
+        return f"{date_str} ({yobi_str}): 授業計画が見つからないか、休校日です。"
+
+    output = [f"📅 {date_str} ({yobi_to_use}) - 第{kiki}期 の時間割"]
+    for row in schedule_rows:
+        time_row = TimeTable.query.get(row[0].時限) # TimeTableにアクセス
+        time_str = f"({time_row.開始時刻.strftime('%H:%M')}-{time_row.終了時刻.strftime('%H:%M')})" if time_row else ""
+        
+        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間")
+        teacher = row[2] if row[2] else ""
+
+        output.append(f"  {row[0].時限}限 {time_str}\n  {subject_name} {teacher}")
+
+    return "\n".join(output)
+
+def get_attendance_summary_for_line(line_user_id):
+    """LINEユーザーIDに対応する学生の出席サマリーを返す (簡略版)"""
+    # ⚠️ データベースにLINEユーザーIDと学生IDの紐付けテーブルが必要です。
+    # 現在のモデルに紐付けテーブルがないため、ここでは仮に学生ID=222521301のデータを使用します。
+    # 実際には、学生が最初にBotを利用する際にIDを登録する機能が必要です。
+    
+    student_id = 222521301 # デバッグ用の仮の学生ID
+    
+    # ... (レポート機能のロジックを流用し、学生IDで出席記録を集計してテキストで返す)
+    # ... (ここでは、詳細な集計ロジックは省略し、簡潔なメッセージを返します)
+    
+    return f"【学生ID:{student_id}】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
+
+def process_exit_record(line_user_id):
+    """学生の在室履歴を終了させる"""
+    # ⚠️ ここでもLINEユーザーIDと学生IDの紐付けが必要です。
+    student_id = 222521301 
+    
+    existing_session = 在室履歴.query.filter_by(学生ID=student_id, 退室時刻=None).first()
+    
+    if existing_session:
+        existing_session.退室時刻 = datetime.now()
+        db.session.commit()
+        return f"✅ {existing_session.学生.学生名}さんの退室時刻を記録しました。"
+    else:
+        return "⚠️ 現在、入室記録が見つかりませんでした。"
 
 def 判定(時限, 登録時刻):
     row = TimeTable.query.get(時限)
@@ -807,7 +866,7 @@ def schedule():
     else:
         # ここに来ることは稀ですが、一応のフォールバック
         selected_kiki = '1'
-        
+
     # 授業と教室をJOINして取得
     schedules_rows = db.session.query(
         時間割.時間割ID, 時間割.曜日, 時間割.時限, 時間割.学期, 
@@ -1498,26 +1557,21 @@ if handler:
         user_id = event.source.user_id
         reply_message = "" 
 
-        if received_text == "在室状況":
-            # (ロジックは変更なし)
-            all_students = 学生.query.all()
-            active_sessions = db.session.query(
-                在室履歴.学生ID, 教室.教室名
-            ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
-             .filter(在室履歴.退室時刻 == None).all()
+        if received_text == "今日の時間割" or received_text == "明日の時間割":
+        # 曜日判定（今日は0、明日は1）
+        days_ahead = 0 if received_text == "今日の時間割" else 1
+        target_date = now + timedelta(days=days_ahead) # timedeltaをインポートする必要があります
+        
+        reply_message = get_schedule_for_line(target_date) # ⚠️ 新しいヘルパー関数を定義します
+        
+        elif received_text == "出席サマリー":
+            # 出席サマリー機能（ここではシンプルに実装）
+            reply_message = get_attendance_summary_for_line(user_id) # ⚠️ 新しいヘルパー関数を定義します
             
-            active_map = {sid: (room_name or '教室不明') for sid, room_name in active_sessions}
-            
-            in_room = []
-            for s in all_students:
-                if s.学生ID in active_map:
-                    in_room.append(f"・{s.学生名} ({active_map[s.学生ID]})")
-            
-            if in_room:
-                reply_message = "現在の在室者:\n" + "\n".join(in_room)
-            else:
-                reply_message = "現在、在室者はいません。"
-                
+        elif received_text == "退室":
+            # 在室履歴を終了させるロジック
+            reply_message = process_exit_record(user_id) # ⚠️ 新しいヘルパー関数を定義します
+        
         elif received_text == "気温":
             if sensor_data:
                  latest = sensor_data[-1]
@@ -1528,9 +1582,16 @@ if handler:
         else:
             reply_message = f"「{received_text}」を受け取りました。"
 
+        quick_reply_buttons = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
+            QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
+            QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
+            QuickReplyButton(action=MessageAction(label="退室する", text="退室")), # 在室記録を終わらせる
+        ])
+
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=reply_message)
+            TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
         )
 
 # --- 12. 実行 ---
