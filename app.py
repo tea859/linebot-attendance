@@ -442,14 +442,14 @@ def initialize_default_schedule():
     except Exception as e:
         print(f"【WARNING】デフォルト時間割の初期化に失敗しました: {e}")
 
-@app.cli.command('init-db')
-def init_db_command():
-    """Flask CLIコマンド: flask init-db"""
-    print("データベーステーブルを作成中...")
-    db.create_all()
-    print("データベース初期化完了。")
-    print("デフォルト時間割のバックアップを作成中...")
-    initialize_default_schedule()
+# @app.cli.command('init-db')
+# def init_db_command():
+#     """Flask CLIコマンド: flask init-db"""
+#     print("データベーステーブルを作成中...")
+#     db.create_all()
+#     print("データベース初期化完了。")
+#     print("デフォルト時間割のバックアップを作成中...")
+#     initialize_default_schedule()
 
 def 判定(時限, 登録時刻):
     row = TimeTable.query.get(時限)
@@ -465,8 +465,6 @@ def 判定(時限, 登録時刻):
 
 sensor_data = [] # センサーデータ（ESP32）用
 
-# --- 6. 認証ルート (Login / Logout) ---
-# (変更なし)
 # --- 6. 認証ルート (Login / Logout) ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
