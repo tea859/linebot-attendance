@@ -797,12 +797,17 @@ def schedule():
             .first()
         
         if current_kiki_record:
-            # 取得した期をセット (結果はタプルで返されるため [0] で値を取り出す)
-            selected_kiki = current_kiki_record[0] 
+            # 🚨 修正箇所 1: 整数として取得された期をここで文字列に変換
+            selected_kiki = str(current_kiki_record[0]) 
         else:
-            # データがない場合や全ての日付が未来の場合は、デフォルトの'1'期を選択
             selected_kiki = '1'
 
+    if selected_kiki is not None:
+        selected_kiki = str(selected_kiki)
+    else:
+        # ここに来ることは稀ですが、一応のフォールバック
+        selected_kiki = '1'
+        
     # 授業と教室をJOINして取得
     schedules_rows = db.session.query(
         時間割.時間割ID, 時間割.曜日, 時間割.時限, 時間割.学期, 
