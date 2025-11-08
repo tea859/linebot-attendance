@@ -1604,11 +1604,19 @@ if handler:
             return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
     
         if received_text == "今日の時間割" or received_text == "明日の時間割":
-        # 曜日判定（今日は0、明日は1）
             days_ahead = 0 if received_text == "今日の時間割" else 1
-            target_date = now + timedelta(days=days_ahead) # timedeltaをインポートする必要があります
+            target_date = now + timedelta(days=days_ahead)
             
-            reply_message = get_schedule_for_line(target_date) # ⚠️ 新しいヘルパー関数を定義します
+            # 🚨 休日判定を追加
+            # Pythonの weekday(): 0=月, 5=土, 6=日
+            if target_date.weekday() >= 5: # 土曜日（5）または日曜日（6）の場合
+                if days_ahead == 0:
+                    reply_message = f"📅 本日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
+                else:
+                    reply_message = f"📅 明日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
+            else:
+                # 授業日であれば、既存の関数を呼び出す
+                reply_message = get_schedule_for_line(target_date)
             
         elif received_text == "出席サマリー":
             # 出席サマリー機能（ここではシンプルに実装）
