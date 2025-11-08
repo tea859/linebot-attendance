@@ -32,7 +32,7 @@ from sqlalchemy import Time as SQLTime, DateTime as SQLDateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
 # --- ▲ SQLAlchemy に変更 ▲ ---
-
+TEMP_EXIT_STATUS = "一時退出中"
 load_dotenv()
 app = Flask(__name__)
 
