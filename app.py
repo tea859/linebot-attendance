@@ -777,20 +777,27 @@ def api_status():
     
     # 教室名も取得 (LEFT JOIN)
     active_sessions = db.session.query(
-        在室履歴.学生ID, 教室.教室名, 在室履歴.入室時刻
+        在室履歴.学生ID, 教室.教室名, 在室履歴.入室時刻, 在室履歴.備考 # ⬅️ 備考を追加
     ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
      .filter(在室履歴.退室時刻 == None).all()
 
     now = datetime.now()
     active_map = {}
-    for sid, room_name, 入室時刻 in active_sessions:
+    for sid, room_name, 入室時刻, 備考 in active_sessions:
         try:
             滞在秒 = int((now - 入室時刻).total_seconds())
             hh = 滞在秒 // 3600
             mm = (滞在秒 % 3600) // 60
             ss = 滞在秒 % 60
             duration = f"{hh:02}:{mm:02}:{ss:02}"
-            active_map[sid] = (room_name or '教室不明', 入室時刻.strftime("%Y-%m-%d %H:%M:%S"), duration)
+            status = "一時退出中" if 備考 == "一時退出中" else "在室" # ⬅️ 備考でステータスを上書き
+    
+            active_map[sid] = {
+                "status": status,  # ⬅️ 変更後のステータス
+                "room": room_name or '教室不明', 
+                "entry": 入室時刻.strftime("%Y-%m-%d %H:%M:%S"), 
+                "duration": duration
+            }
         except ValueError:
              active_map[sid] = (room_name or '教室不明', 入室時刻.strftime("%Y-%m-%d %H:%M:%S"), "Error")
 
