@@ -1559,11 +1559,11 @@ if handler:
 
         if received_text == "今日の時間割" or received_text == "明日の時間割":
         # 曜日判定（今日は0、明日は1）
-        days_ahead = 0 if received_text == "今日の時間割" else 1
-        target_date = now + timedelta(days=days_ahead) # timedeltaをインポートする必要があります
-        
-        reply_message = get_schedule_for_line(target_date) # ⚠️ 新しいヘルパー関数を定義します
-        
+            days_ahead = 0 if received_text == "今日の時間割" else 1
+            target_date = now + timedelta(days=days_ahead) # timedeltaをインポートする必要があります
+            
+            reply_message = get_schedule_for_line(target_date) # ⚠️ 新しいヘルパー関数を定義します
+            
         elif received_text == "出席サマリー":
             # 出席サマリー機能（ここではシンプルに実装）
             reply_message = get_attendance_summary_for_line(user_id) # ⚠️ 新しいヘルパー関数を定義します
