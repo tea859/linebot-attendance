@@ -1693,7 +1693,23 @@ if handler:
                  reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
             else:
                  reply_message = "センサーデータがまだありません。"
-                 
+            # 🚨 一時退出
+        elif received_text == "一時退出":
+            # process_temporary_exit は学生IDを紐付けテーブルから取得して処理を実行
+            reply_message = process_temporary_exit(user_id) 
+            
+        # 🚨 復帰
+        elif received_text == "戻りました":
+            reply_message = process_return_from_exit(user_id)
+            
+        # 🚨 最終退室
+        elif received_text == "最終退室":
+            # process_exit_record は退室時刻を記録してセッションを終了
+            reply_message = process_exit_record(user_id)
+            
+        # 🚨 以前の "退室" コマンドも一応残しておく（クイックリプライでは「最終退室」を使う）
+        elif received_text == "退室":
+            reply_message = process_exit_record(user_id)         
         else:
             reply_message = f"「{received_text}」を受け取りました。"
 
