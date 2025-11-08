@@ -178,6 +178,8 @@ class 在室履歴(db.Model):
     教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
     入室時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now) # ⬅️ SQLDateTime に変更
     退室時刻 = db.Column(SQLDateTime, nullable=True) # ⬅️ SQLDateTime に変更
+
+    備考 = db.Column(db.String(50), nullable=True)
     
     学生 = db.relationship('学生', back_populates='在室履歴s')
     教室 = db.relationship('教室', foreign_keys=[教室ID])
