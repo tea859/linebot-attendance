@@ -93,6 +93,104 @@ admin_user_db = {
 
 # app.py 内の関数
 
+
+@login_manager.user_loader
+def load_user(user_id):
+    return admin_user_db.get(user_id)
+
+# --- 4. データベースモデル (ORM クラス) の定義 ---
+# (テーブル名・列名は日本語のままとします)
+
+class 教室(db.Model):
+    __tablename__ = '教室'
+    教室ID = db.Column(db.Integer, primary_key=True)
+    教室名 = db.Column(db.String, nullable=False)
+    授業s = db.relationship('授業', back_populates='教室')
+
+class 学生(db.Model):
+    __tablename__ = '学生'
+    学生ID = db.Column(db.Integer, primary_key=True)
+    学生名 = db.Column(db.String, nullable=False, unique=True)
+    出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
+    在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
+
+class 授業(db.Model):
+    __tablename__ = '授業'
+    授業ID = db.Column(db.Integer, primary_key=True)
+    授業科目名 = db.Column(db.String, nullable=False)
+    担当教員 = db.Column(db.String)
+    教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
+    教室 = db.relationship('教室', back_populates='授業s')
+    時間割s = db.relationship('時間割', back_populates='授業', cascade="all, delete-orphan")
+    出席記録s = db.relationship('出席記録', back_populates='授業', cascade="all, delete-orphan")
+
+class TimeTable(db.Model):
+    __tablename__ = 'TimeTable'
+    時限 = db.Column(db.Integer, primary_key=True)
+    開始時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
+    終了時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
+    備考 = db.Column(db.String)
+
+class 授業計画(db.Model):
+    __tablename__ = '授業計画'
+    日付 = db.Column(db.String, primary_key=True) # YYYY/MM/DD
+    期 = db.Column(db.Integer)
+    授業曜日 = db.Column(db.Integer)
+    備考 = db.Column(db.String)
+
+class 時間割(db.Model):
+    __tablename__ = '時間割'
+    時間割ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    学期 = db.Column(db.String) 
+    曜日 = db.Column(db.String) 
+    時限 = db.Column(db.Integer)
+    授業ID = db.Column(db.Integer, db.ForeignKey('授業.授業ID'))
+    備考 = db.Column(db.String)
+    授業 = db.relationship('授業', back_populates='時間割s')
+    __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_gaku_yobi_jigen_uc'),)
+
+class 出席記録(db.Model):
+    __tablename__ = '出席記録'
+    # 以前のスキーマ (PRAGMAの結果) に合わせ、PKはROWIDに依存 (autoincrement=True)
+    ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
+    授業ID = db.Column(db.Integer, db.ForeignKey('授業.授業ID', ondelete='CASCADE'), nullable=False)
+    出席時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now)
+    状態 = db.Column(db.String, nullable=False) 
+    時限 = db.Column(db.Integer, nullable=False)
+    
+    出席日付 = Column(SQLDateTime, Computed(func.date(出席時刻)))
+
+    学生 = db.relationship('学生', back_populates='出席記録s')
+    授業 = db.relationship('授業', back_populates='出席記録s')
+    
+    # データベース側で日付を抽出する関数 func.date() を使用
+    # これにより SQLite と PostgreSQL の両方で動作
+    __table_args__ = (
+        UniqueConstraint('学生ID', '授業ID', '時限', '出席日付', name='_student_class_period_date_uc'),
+    )
+
+class 在室履歴(db.Model):
+    __tablename__ = '在室履歴'
+    履歴ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
+    教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
+    入室時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now) # ⬅️ SQLDateTime に変更
+    退室時刻 = db.Column(SQLDateTime, nullable=True) # ⬅️ SQLDateTime に変更
+    
+    学生 = db.relationship('学生', back_populates='在室履歴s')
+    教室 = db.relationship('教室', foreign_keys=[教室ID])
+
+class 時間割_デフォルト(db.Model):
+    __tablename__ = '時間割_デフォルト'
+    時間割ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    学期 = db.Column(db.String)
+    曜日 = db.Column(db.String)
+    時限 = db.Column(db.Integer)
+    授業ID = db.Column(db.Integer)
+    備考 = db.Column(db.String)
+    __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_default_gaku_yobi_jigen_uc'),)
+
 @app.cli.command('init-db')
 def init_db_command():
     """Flask CLIコマンド: flask init-db"""
@@ -292,105 +390,6 @@ def init_db_command():
         initialize_default_schedule()
         
     # --- データベース初期化完了 ---
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return admin_user_db.get(user_id)
-
-# --- 4. データベースモデル (ORM クラス) の定義 ---
-# (テーブル名・列名は日本語のままとします)
-
-class 教室(db.Model):
-    __tablename__ = '教室'
-    教室ID = db.Column(db.Integer, primary_key=True)
-    教室名 = db.Column(db.String, nullable=False)
-    授業s = db.relationship('授業', back_populates='教室')
-
-class 学生(db.Model):
-    __tablename__ = '学生'
-    学生ID = db.Column(db.Integer, primary_key=True)
-    学生名 = db.Column(db.String, nullable=False, unique=True)
-    出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
-    在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
-
-class 授業(db.Model):
-    __tablename__ = '授業'
-    授業ID = db.Column(db.Integer, primary_key=True)
-    授業科目名 = db.Column(db.String, nullable=False)
-    担当教員 = db.Column(db.String)
-    教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
-    教室 = db.relationship('教室', back_populates='授業s')
-    時間割s = db.relationship('時間割', back_populates='授業', cascade="all, delete-orphan")
-    出席記録s = db.relationship('出席記録', back_populates='授業', cascade="all, delete-orphan")
-
-class TimeTable(db.Model):
-    __tablename__ = 'TimeTable'
-    時限 = db.Column(db.Integer, primary_key=True)
-    開始時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
-    終了時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
-    備考 = db.Column(db.String)
-
-class 授業計画(db.Model):
-    __tablename__ = '授業計画'
-    日付 = db.Column(db.String, primary_key=True) # YYYY/MM/DD
-    期 = db.Column(db.Integer)
-    授業曜日 = db.Column(db.Integer)
-    備考 = db.Column(db.String)
-
-class 時間割(db.Model):
-    __tablename__ = '時間割'
-    時間割ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    学期 = db.Column(db.String) 
-    曜日 = db.Column(db.String) 
-    時限 = db.Column(db.Integer)
-    授業ID = db.Column(db.Integer, db.ForeignKey('授業.授業ID'))
-    備考 = db.Column(db.String)
-    授業 = db.relationship('授業', back_populates='時間割s')
-    __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_gaku_yobi_jigen_uc'),)
-
-class 出席記録(db.Model):
-    __tablename__ = '出席記録'
-    # 以前のスキーマ (PRAGMAの結果) に合わせ、PKはROWIDに依存 (autoincrement=True)
-    ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
-    授業ID = db.Column(db.Integer, db.ForeignKey('授業.授業ID', ondelete='CASCADE'), nullable=False)
-    出席時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now)
-    状態 = db.Column(db.String, nullable=False) 
-    時限 = db.Column(db.Integer, nullable=False)
-    
-    出席日付 = Column(SQLDateTime, Computed(func.date(出席時刻)))
-
-    学生 = db.relationship('学生', back_populates='出席記録s')
-    授業 = db.relationship('授業', back_populates='出席記録s')
-    
-    # データベース側で日付を抽出する関数 func.date() を使用
-    # これにより SQLite と PostgreSQL の両方で動作
-    __table_args__ = (
-        UniqueConstraint('学生ID', '授業ID', '時限', '出席日付', name='_student_class_period_date_uc'),
-    )
-
-class 在室履歴(db.Model):
-    __tablename__ = '在室履歴'
-    履歴ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
-    教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
-    入室時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now) # ⬅️ SQLDateTime に変更
-    退室時刻 = db.Column(SQLDateTime, nullable=True) # ⬅️ SQLDateTime に変更
-    
-    学生 = db.relationship('学生', back_populates='在室履歴s')
-    教室 = db.relationship('教室', foreign_keys=[教室ID])
-
-class 時間割_デフォルト(db.Model):
-    __tablename__ = '時間割_デフォルト'
-    時間割ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    学期 = db.Column(db.String)
-    曜日 = db.Column(db.String)
-    時限 = db.Column(db.Integer)
-    授業ID = db.Column(db.Integer)
-    備考 = db.Column(db.String)
-    __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_default_gaku_yobi_jigen_uc'),)
-
 
 # --- 5. ヘルパー関数 (SQLAlchemy版) ---
 
