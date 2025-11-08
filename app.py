@@ -221,6 +221,20 @@ def init_db_command():
     from sqlalchemy.exc import IntegrityError
     
     with app.app_context():
+        # 🚨 [重要] 在室履歴テーブルを削除し、新しい構造で再作成するためのコード 🚨
+        try:
+            # 1. 既存の在室履歴テーブルを削除 (データは消えます)
+            db.session.execute(text('DROP TABLE IF EXISTS "在室履歴" CASCADE'))
+            db.session.commit()
+            print("【INFO】古い在室履歴テーブルを削除しました。")
+        except Exception as e:
+            # エラーが出ても初期化を止めない
+            print(f"【WARNING】在室履歴の削除中にエラーが発生しました: {e}")
+            db.session.rollback()
+            
+        # 2. すべてのテーブルを作成/再作成（在室履歴には「備考」が追加される）
+        db.create_all()
+        print("データベース初期化完了。")
         
         # --- 1. 教室 (Rooms) ---
         if 教室.query.count() == 0:
@@ -1715,8 +1729,6 @@ if handler:
 # --- 12. 実行 ---
 
 if __name__ == "__main__":
-    # アプリケーションコンテキスト内でデータベースを作成
     with app.app_context():
-        db.create_all() # 存在しないテーブルのみ作成
-        
+
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
