@@ -329,9 +329,17 @@ def init_db_command():
             # 時間割のデータには曜日が文字列で入っているため、そのまま使用
             
             initial_schedule = []
-            for id, kiki, yobi, jigen, shid, biko in schedule_data:
-                # '1|1|月|1|325|' のように、最初のID (1) はauto incrementのため省略し、学期から開始
-                # 提供されたデータには最初のIDが含まれているため、それを無視してインデックス1から開始
+            for row in schedule_data:
+                if len(row) == 6:
+                    # IDが含まれる場合（元のSQLite形式）
+                    # IDは不要なので、残りの5つの値を取得
+                    _, kiki, yobi, jigen, shid, biko = row
+                elif len(row) == 5:
+                    # IDが含まれない場合（修正後のデータ形式）
+                    kiki, yobi, jigen, shid, biko = row
+                else:
+                    print(f"FATAL INSERT ERROR (時間割): データ形式が不正です: {row}")
+                    continue # この行をスキップして次へ
                 initial_schedule.append(
                     時間割(学期=str(kiki), 曜日=yobi, 時限=jigen, 授業ID=shid, 備考=biko)
                 )
