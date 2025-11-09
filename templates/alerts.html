@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}連絡掲示板 | 管理者画面{% endblock %}
+
+{% block content %}
+    <h2 class="mt-4">📢 遅刻・欠席連絡 掲示板</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if reports %}
+        <p><strong>未確認の連絡: {{ reports|length }} 件</strong></p>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>報告日時</th>
+                    <th>学生ID</th>
+                    <th>学生名</th>
+                    <th>区分</th>
+                    <th>理由</th>
+                    <th>アクション</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report, student_name in reports %}
+                <tr>
+                    <td>{{ report.report_date.strftime('%Y/%m/%d %H:%M') }}</td>
+                    <td>{{ report.student_id }}</td>
+                    <td>{{ student_name }}</td>
+                    <td><span class="badge bg-{{ 'danger' if report.report_type == '欠席' else 'warning' }}">{{ report.report_type }}</span></td>
+                    <td>{{ report.reason }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('resolve_alert', record_id=report.record_id) }}">
+                            <button type="submit" class="btn btn-sm btn-success">確認済みにする</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info">現在、未確認の遅刻・欠席連絡はありません。</div>
+    {% endif %}
+
+    <p class="mt-4"><a href="{{ url_for('index') }}" class="btn btn-secondary">ダッシュボードに戻る</a></p>
+
+{% endblock %}
