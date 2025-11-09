@@ -716,7 +716,7 @@ def api_schedule_update():
         
         # 既存の時間割データを検索
         existing_schedule = 時間割.query.filter_by(
-            期=kiki, 
+            学期=kiki, 
             曜日=day, 
             時限=period
         ).first()
