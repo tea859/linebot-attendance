@@ -33,6 +33,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
 # --- ▲ SQLAlchemy に変更 ▲ ---
 TEMP_EXIT_STATUS = "一時退出中"
+SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TOKEN_HERE')
 load_dotenv()
 app = Flask(__name__)
 
