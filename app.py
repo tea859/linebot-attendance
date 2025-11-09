@@ -698,8 +698,19 @@ def api_schedule_update():
         subject_id = request.form.get('subject_id')
         remark = request.form.get('remark') # 5限目の備考用 (任意)
         
-        if not all([kiki, day, period]):
-            return jsonify({'error': 'Missing required fields (kiki, day, period)'}), 400
+        # 🚨 必須フィールドの確認と型変換を強化
+        if not all([kiki, day, period, subject_id]):
+            return jsonify({'success': False, 'error': 'Missing required form data (kiki, day, period, subject_id)'}), 400
+
+        kiki_str = str(kiki)
+        day_str = str(day)
+        
+        # 🚨 period と subject_id は整数に変換し、失敗したらエラーを返す
+        try:
+            period_int = int(period)
+            subject_id_int = int(subject_id)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Period or Subject ID is not a valid integer'}), 400
 
         # 3. データベース更新ロジック
         
