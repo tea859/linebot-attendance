@@ -679,7 +679,82 @@ def index():
                            category=category)
 
 # --- 8. APIルート (SQLAlchemy版) ---
+@app.route('/api/schedule_update', methods=['POST'])
+def api_schedule_update():
+    """
+    外部サービスからの時間割クイック更新API。認証トークンが必要。
+    """
+    # 1. トークン認証
+    token = request.form.get('token')
+    if token != SCHEDULE_API_TOKEN:
+        return jsonify({'error': 'Unauthorized: Invalid API token'}), 401
 
+    try:
+        # 2. 必須パラメータの取得
+        kiki = request.form.get('kiki')
+        day = request.form.get('day')
+        period = request.form.get('period')
+        subject_id = request.form.get('subject_id')
+        remark = request.form.get('remark') # 5限目の備考用 (任意)
+        
+        if not all([kiki, day, period]):
+            return jsonify({'error': 'Missing required fields (kiki, day, period)'}), 400
+
+        # 3. データベース更新ロジック
+        
+        # 既存の時間割データを検索
+        existing_schedule = 時間割.query.filter_by(
+            期=kiki, 
+            曜日=day, 
+            時限=period
+        ).first()
+        
+        kiki_int = int(kiki)
+        period_int = int(period)
+
+        if period_int == 5: # 5限目（備考欄）の特殊処理
+            if existing_schedule:
+                existing_schedule.科目ID = None
+                existing_schedule.備考 = remark
+                db.session.commit()
+                message = f"第{kiki_int}期 {day}曜 5限の備考を更新しました。"
+            elif remark: # 5限目がなく、備考が指定されている場合のみ新規作成
+                new_schedule = 時間割(期=kiki_int, 曜日=day, 時限=period_int, 科目ID=None, 備考=remark)
+                db.session.add(new_schedule)
+                db.session.commit()
+                message = f"第{kiki_int}期 {day}曜 5限の備考を新規作成しました。"
+            else:
+                message = f"第{kiki_int}期 {day}曜 5限に更新はありませんでした。"
+                
+        else: # 通常授業 (1〜4限)
+            subject_id_int = int(subject_id) if subject_id and subject_id.isdigit() else 0
+
+            if subject_id_int == 0: # 削除（空欄にする）
+                if existing_schedule:
+                    db.session.delete(existing_schedule)
+                    db.session.commit()
+                    message = f"第{kiki_int}期 {day}曜 {period_int}限の授業を削除しました。"
+                else:
+                    message = f"第{kiki_int}期 {day}曜 {period_int}限はすでに空欄です。"
+            else:
+                if existing_schedule:
+                    existing_schedule.科目ID = subject_id_int
+                    existing_schedule.備考 = None
+                    db.session.commit()
+                    message = f"第{kiki_int}期 {day}曜 {period_int}限の授業を更新しました。（科目ID: {subject_id_int}）"
+                else:
+                    new_schedule = 時間割(期=kiki_int, 曜日=day, 時限=period_int, 科目ID=subject_id_int, 備考=None)
+                    db.session.add(new_schedule)
+                    db.session.commit()
+                    message = f"第{kiki_int}期 {day}曜 {period_int}限の授業を新規作成しました。（科目ID: {subject_id_int}）"
+
+        return jsonify({'success': True, 'message': message}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Schedule update failed: {e}")
+        return jsonify({'success': False, 'error': f'An internal error occurred: {str(e)}'}), 500
+    
 @app.route("/api/register_attendance", methods=["POST"])
 @login_required 
 def api_register_attendance():
