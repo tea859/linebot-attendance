@@ -731,7 +731,7 @@ def api_schedule_update():
                 db.session.commit()
                 message = f"第{kiki_int}期 {day}曜 5限の備考を更新しました。"
             elif remark: # 5限目がなく、備考が指定されている場合のみ新規作成
-                new_schedule = 時間割(期=kiki_int, 曜日=day, 時限=period_int, 科目ID=None, 備考=remark)
+                new_schedule = 時間割(学期=kiki_int, 曜日=day, 時限=period_int, 科目ID=None, 備考=remark)
                 db.session.add(new_schedule)
                 db.session.commit()
                 message = f"第{kiki_int}期 {day}曜 5限の備考を新規作成しました。"
@@ -755,7 +755,7 @@ def api_schedule_update():
                     db.session.commit()
                     message = f"第{kiki_int}期 {day}曜 {period_int}限の授業を更新しました。（科目ID: {subject_id_int}）"
                 else:
-                    new_schedule = 時間割(期=kiki_int, 曜日=day, 時限=period_int, 科目ID=subject_id_int, 備考=None)
+                    new_schedule = 時間割(学期=kiki_int, 曜日=day, 時限=period_int, 科目ID=subject_id_int, 備考=None)
                     db.session.add(new_schedule)
                     db.session.commit()
                     message = f"第{kiki_int}期 {day}曜 {period_int}限の授業を新規作成しました。（科目ID: {subject_id_int}）"
