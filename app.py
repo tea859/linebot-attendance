@@ -209,6 +209,17 @@ class LineUser(db.Model):
     def __repr__(self):
         return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
 
+class ReportRecord(db.Model):
+    __tablename__ = 'report_record'
+    record_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
+    report_type = db.Column(db.String(10), nullable=False) # '遅刻' or '欠席'
+    reason = db.Column(db.String(500), nullable=True) # 連絡理由
+    report_date = db.Column(SQLDateTime, nullable=False, default=datetime.now)
+    is_resolved = db.Column(db.Boolean, default=False) # 管理者確認済みフラグ
+    
+    student = relationship("学生") # 学生情報を参照
+
 @app.cli.command('init-db')
 def init_db_command():
     
@@ -1616,6 +1627,31 @@ def send_schedule_email_route():
         
     return redirect(url_for('index'))
 
+@app.route("/alerts")
+@login_required
+def alerts():
+    """(管理) 遅刻・欠席の連絡掲示板"""
+    
+    # 未解決の連絡を最新のものから取得
+    unresolved_reports = db.session.query(ReportRecord, 学生.学生名) \
+        .join(学生, ReportRecord.student_id == 学生.学生ID) \
+        .filter(ReportRecord.is_resolved == False) \
+        .order_by(ReportRecord.report_date.desc()) \
+        .all()
+        
+    return render_template("alerts.html", reports=unresolved_reports)
+
+@app.route("/resolve_alert/<int:record_id>", methods=["POST"])
+@login_required
+def resolve_alert(record_id):
+    """連絡を管理者確認済みにする"""
+    report = ReportRecord.query.get(record_id)
+    if report:
+        report.is_resolved = True
+        db.session.commit()
+        flash("✅ 連絡を確認済みにしました。", "success")
+    return redirect(url_for('alerts'))
+
 # --- 11. LINE Bot Webhook (SQLAlchemy版) ---
 
 if handler:
@@ -1663,7 +1699,38 @@ if handler:
             db.session.add(new_mapping)
             db.session.commit()
             return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
+        
+        # --- 2. 遅刻/欠席の連絡処理 ---
+        if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
     
+            # ユーザーの学生IDを取得
+            student_id = get_student_id_from_line_user(user_id)
+            if student_id is None:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。"))
+
+            report_type = "欠席" if received_text.startswith("欠席連絡:") else "遅刻"
+            try:
+                reason = received_text.split(":", 1)[1].strip()
+                if not reason: raise IndexError
+            except IndexError:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {report_type}連絡の理由を必ず記述してください。\n例: 「{report_type}連絡:腹痛のため」"))
+            
+            # データベースに記録
+            new_report = ReportRecord(
+                student_id=student_id,
+                report_type=report_type,
+                reason=reason,
+                report_date=datetime.now(),
+                is_resolved=False
+            )
+            db.session.add(new_report)
+            db.session.commit()
+            
+            student = 学生.query.get(student_id)
+            return line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知します。"
+            ))
+
         if received_text == "今日の時間割" or received_text == "明日の時間割":
             days_ahead = 0 if received_text == "今日の時間割" else 1
             target_date = now + timedelta(days=days_ahead)
