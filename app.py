@@ -767,8 +767,7 @@ def api_schedule_update():
         print(f"Schedule update failed: {e}")
         return jsonify({'success': False, 'error': f'An internal error occurred: {str(e)}'}), 500
     
-@app.route("/api/register_attendance", methods=["POST"])
-@login_required 
+@app.route("/api/register_attendance", methods=["POST"]) 
 def api_register_attendance():
     """(顔認証API) 出席信号を受け取りDBに登録 (ORM版)"""
     try:
