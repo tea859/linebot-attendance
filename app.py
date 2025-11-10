@@ -218,8 +218,15 @@ class ReportRecord(db.Model):
     reason = db.Column(db.String(500), nullable=True) # 連絡理由
     report_date = db.Column(SQLDateTime, nullable=False, default=datetime.now)
     is_resolved = db.Column(db.Boolean, default=False) # 管理者確認済みフラグ
-    
     student = relationship("学生") # 学生情報を参照
+
+class CommandQueue(db.Model):
+    __tablename__ = 'command_queue'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    command_type = db.Column(db.String(50), nullable=False) # 例: 'CHECK', 'RESET'
+    status = db.Column(db.String(20), default='PENDING') # 'PENDING', 'SENT', 'COMPLETE'
+    created_at = db.Column(SQLDateTime, default=datetime.now)
+    # 一度送信したら削除されることを前提とします
 
 @app.cli.command('init-db')
 def init_db_command():
@@ -1489,6 +1496,44 @@ def my_attendance_detail():
                            report_data=report_data_detail, max_count=max_recorded_count,
                            selected_kiki=selected_kiki, kikis=["1", "2", "3", "4"],
                            subject_filter=subject_name_filter)
+
+@app.route('/api/check_command', methods=['GET'])
+def check_command():
+    """RasPiからのポーリングを受け付け、未処理のコマンドを返す"""
+    
+    # 未処理のコマンドを一つだけ取得 (FIFO: 先入れ先出し)
+    command_record = CommandQueue.query.filter_by(status='PENDING').order_by(CommandQueue.created_at.asc()).first()
+
+    if command_record:
+        # コマンドを返す前にステータスを更新し、二重送信を防ぐ
+        command_record.status = 'SENT'
+        db.session.commit()
+        
+        return jsonify({
+            'command': command_record.command_type,
+            'id': command_record.id,
+            'status': 'READY'
+        }), 200
+    else:
+        return jsonify({'status': 'NO_COMMAND'}), 200
+
+@app.route('/api/set_command', methods=['POST'])
+def set_command():
+    """Web UIからコマンドを受け取り、DBに保存する"""
+    command_type = request.form.get('command_type') or request.get_json().get('command_type')
+
+    if not command_type:
+        return jsonify({'success': False, 'message': 'Command type missing'}), 400
+    
+    try:
+        new_command = CommandQueue(command_type=command_type)
+        db.session.add(new_command)
+        db.session.commit()
+        return jsonify({'success': True, 'message': f'Command {command_type} queued'}), 201
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Command queue error: {e}")
+        return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
 
 @app.route("/report_summary", methods=["GET"])
 @login_required
