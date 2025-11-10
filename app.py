@@ -22,7 +22,9 @@ from linebot.exceptions import (
     InvalidSignatureError
 )
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage,
+    MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction,
+    FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, SeparatorComponent, SpacerComponent,
+    ImageComponent,
 )
 from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
@@ -229,6 +231,103 @@ class CommandQueue(db.Model):
     status = db.Column(db.String(20), default='PENDING') # 'PENDING', 'SENT', 'COMPLETE'
     created_at = db.Column(SQLDateTime, default=datetime.now)
     # 一度送信したら削除されることを前提とします
+
+def get_period_time(period):
+    """授業時限数に基づいて開始・終了時刻を返す"""
+    # 🚨 あなたの学校の時間割に合わせて時刻を修正してください
+    time_map = {
+        1: "09:00 - 10:30",
+        2: "10:40 - 12:10",
+        3: "13:10 - 14:40",
+        4: "14:50 - 16:20",
+        5: "16:30 - 18:00", # 5限目
+    }
+    return time_map.get(period, "時間不明")
+    
+def create_timetable_flex_message(date_str, yobi_str, schedule_data):
+    """
+    時間割データを元にFlex MessageのBubbleコンポーネントを作成し、FlexSendMessageを返す
+    schedule_data は {period: {subject: str, teacher: str, room: str, remark: str, is_empty: bool}, ...} の辞書を想定
+    """
+    
+    class_contents = []
+
+    # 1限から5限までループして、各時限のコンポーネントを作成
+    for period in range(1, 6):
+        period_key = str(period)
+        slot = schedule_data.get(period_key)
+
+        # データがない、または空きコマの場合
+        if not slot or slot.get('is_empty'):
+            # グレーの空きコマ表示
+            class_contents.append({
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"【{period}限】", "color": "#888888", "flex": 2},
+                    {"type": "text", "text": "空きコマ / 休憩", "color": "#888888", "flex": 5}
+                ],
+                "paddingBottom": "sm"
+            })
+        else:
+            # 授業情報が存在する場合
+            subject_name = slot.get('subject')
+            teacher_name = slot.get('teacher')
+            room_name = slot.get('room')
+            remark = slot.get('remark')
+            
+            # 5限目（備考欄）の特別な扱い
+            if period == 5 and remark:
+                content_text = f"💡 備考: {remark}"
+                color = "#D97706" # オレンジ系
+            elif period == 5:
+                # 5限だが備考が空の場合
+                content_text = "💡 備考: 特になし"
+                color = "#374151" # グレー
+            else:
+                content_text = f"授業: {subject_name} / 👤 {teacher_name} / 📍 {room_name}"
+                color = "#1F2937" # 濃いグレー
+
+            # 授業情報Box
+            class_contents.append({
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": f"【{period}限】 {get_period_time(period)}", "color": "#1D4ED8", "size": "sm"}, # 濃い青
+                    {"type": "text", "text": content_text, "wrap": True, "weight": "bold", "size": "md", "color": color, "margin": "sm"}
+                ],
+                "spacing": "xs",
+                "paddingBottom": "md"
+            })
+
+        # 各授業の間に区切り線を入れる（最後は除く）
+        if period < 5:
+            class_contents.append({"type": "separator", "margin": "sm"})
+
+
+    # Bubble構造の定義
+    flex_content = {
+      "type": "bubble",
+      "size": "giga", 
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {"type": "text", "text": f"🗓️ {date_str} ({yobi_str}) の時間割", "weight": "bold", "color": "#FFFFFF", "size": "lg", "align": "center"}
+        ],
+        "paddingAll": "15px",
+        "backgroundColor": "#1D4ED8", # 濃い青
+        "height": "60px"
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": class_contents,
+        "paddingAll": "20px"
+      }
+    }
+    
+    return FlexSendMessage(alt_text=f"{date_str}の時間割", contents=flex_content)
 
 @app.cli.command('init-db')
 def init_db_command():
