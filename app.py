@@ -1979,6 +1979,51 @@ if handler:
 # ----------------------------------------------------------------------
 # 11. 学生専用ポータル (Student Portal)
 # ----------------------------------------------------------------------
+@app.route("/student_register", methods=["GET", "POST"])
+def student_register():
+    """学生専用の初回パスワード設定ページ"""
+    if current_user.is_authenticated:
+        return redirect(url_for('my_portal')) # ログイン済ならポータルへ
+
+    if request.method == "POST":
+        try:
+            student_id = int(request.form.get("student_id"))
+            password = request.form.get("password")
+            password_confirm = request.form.get("password_confirm")
+
+            if not student_id or not password or not password_confirm:
+                flash("❌ すべての項目を入力してください。", "error")
+                return redirect(url_for('student_register'))
+            
+            if password != password_confirm:
+                flash("❌ パスワードが一致しません。", "error")
+                return redirect(url_for('student_register'))
+
+            student = 学生.query.get(student_id)
+            
+            if not student:
+                flash("❌ その学生IDは存在しません。管理者に確認してください。", "error")
+                return redirect(url_for('student_register'))
+            
+            # 🚨 ここが重要: すでにパスワードが設定済みかチェック
+            if student.password_hash is not None:
+                flash("⚠️ この学生IDは既にパスワード設定済みです。ログイン画面からログインしてください。", "warning")
+                return redirect(url_for('student_login'))
+            
+            # パスワードをハッシュ化して設定
+            student.set_password(password)
+            db.session.commit()
+            
+            flash("✅ パスワードを設定しました！ ログインしてください。", "success")
+            return redirect(url_for('student_login'))
+
+        except ValueError:
+            flash("学生IDは数字で入力してください。", "error")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"登録エラーが発生しました: {e}", "error")
+            
+    return render_template("student_register.html")
 
 @app.route("/student_login", methods=["GET", "POST"])
 def student_login():
