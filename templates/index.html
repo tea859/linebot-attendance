@@ -147,7 +147,53 @@
             </a>
             {% endif %}
 	    </div>
-
+		
+		<h2 class="text-2xl font-bold text-gray-700 mb-4 mt-8">🍓 RasPi 400 指令センター</h2>
+		<div class="bg-white p-6 rounded-xl shadow-lg border border-red-400">
+		    <p class="text-gray-600 mb-4">カメラ側（Raspberry Pi）に対して、認証リセットや在不在確認の指令を出します。</p>
+		    <div class="flex space-x-4">
+		        <button onclick="sendCommand('CHECK')" 
+		                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md">
+		            在不在確認指令 (CHECK)
+		        </button>
+		        <button onclick="sendCommand('RESET')" 
+		                class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md">
+		            認証状態リセット (RESET)
+		        </button>
+		    </div>
+		    <div id="command-feedback" class="mt-4 text-center font-medium"></div>
+		</div>
+		<script>
+		    function sendCommand(commandType) {
+		        const feedback = document.getElementById('command-feedback');
+		        feedback.textContent = `指令 ${commandType} を送信中...`;
+		        
+		        fetch('/api/set_command', {
+		            method: 'POST',
+		            headers: {
+		                'Content-Type': 'application/json',
+		            },
+		            body: JSON.stringify({ command_type: commandType })
+		        })
+		        .then(response => response.json())
+		        .then(data => {
+		            if (data.success) {
+		                feedback.textContent = `✅ 指令 ${commandType} がキューに登録されました。`;
+		                feedback.classList.remove('text-red-500');
+		                feedback.classList.add('text-green-600');
+		            } else {
+		                feedback.textContent = `❌ 指令送信エラー: ${data.message}`;
+		                feedback.classList.remove('text-green-600');
+		                feedback.classList.add('text-red-500');
+		            }
+		        })
+		        .catch(error => {
+		            feedback.textContent = `❌ ネットワークエラー: ${error}`;
+		            feedback.classList.remove('text-green-600');
+		            feedback.classList.add('text-red-500');
+		        });
+		    }
+		</script>
         <h2 class="text-2xl font-bold text-gray-700 mb-4">学生別出席サマリー</h2>
         <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
             
@@ -175,7 +221,6 @@
                 <p class="text-gray-500">センサーデータを読み込み中...</p>
             </div>
         </div>
-        <h2 class="text-2xl font-bold text-gray-700 mb-4 mt-12">リアルタイム在室状況</h2>
         <h2 class="text-2xl font-bold text-gray-700 mb-4 mt-12">リアルタイム在室状況</h2>
         <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
             <div class="overflow-y-auto max-h-[500px]">
