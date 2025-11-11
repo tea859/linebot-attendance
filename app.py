@@ -1966,6 +1966,25 @@ if handler:
         reply_message = ""
         now = datetime.now()
 
+        if received_text in ["在室状況", "今誰がいる？"]:
+        
+            all_students = 学生.query.all()
+            # データベースから在室中の学生のリストを取得 (学生名, 教室名)
+            active_sessions = db.session.query(
+                在室履歴.学生ID, 教室.教室名, 学生.学生名 
+            ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
+             .join(学生, 在室履歴.学生ID == 学生.学生ID)\
+             .filter(在室履歴.退室時刻 == None).all()
+            
+            # Flex Message作成用のリストに整形
+            active_students_list = []
+            for sid, room_name, student_name in active_sessions:
+                # 備考（一時退出中）も確認し、名前に含めるなどするとさらに親切
+                active_students_list.append((student_name, room_name or '教室不明'))
+                
+            # Flex Message を生成して response_message に代入
+            response_message = create_in_room_list_flex_message(active_students_list)
+        
         # --- 1. アカウント登録処理 ---
         if received_text.startswith("登録:"):
             try:
