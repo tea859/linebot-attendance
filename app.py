@@ -159,7 +159,7 @@ class 学生(UserMixin, db.Model):
     出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
     在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
     line_user = relationship("LineUser", back_populates="student", uselist=False, cascade="all, delete-orphan")
-    face_data = relationship("face_data", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
 
     # 🚨 Flask-Loginのためのメソッドを追加
     def get_id(self):
