@@ -573,6 +573,63 @@ def get_current_kiki():
     result = 授業計画.query.filter_by(日付=today_str).first()
     return str(result.期) if result else "1"
 
+def create_in_room_list_flex_message(active_students):
+    """
+    在室中の学生リストを元にFlex Messageを作成する
+    active_students は [(学生名, 教室名), ...] のリストを想定
+    """
+    
+    if not active_students:
+        return TextSendMessage(text="現在、在室中の学生はいません。")
+        
+    # 項目（contents）のリストを作成
+    student_components = []
+    for student_name, room_name in active_students:
+        student_components.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": f"👤 {student_name}", "flex": 5, "weight": "bold", "size": "md"},
+                {"type": "text", "text": f"📍 {room_name}", "flex": 3, "align": "end", "color": "#888888", "size": "sm"}
+            ],
+            "spacing": "sm",
+            "margin": "md"
+        })
+        student_components.append({"type": "separator"}) # 区切り線
+
+    # 最後の区切り線を削除
+    if student_components:
+        student_components.pop() 
+
+    # Flex Message の Bubble 構造を定義
+    flex_content = {
+      "type": "bubble",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {"type": "text", "text": "🏫 現在の在室状況", "weight": "bold", "size": "xl", "color": "#FFFFFF"}
+        ],
+        "paddingAll": "15px",
+        "backgroundColor": "#3B82F6"
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": student_components,
+        "paddingAll": "20px"
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {"type": "text", "text": f"最終更新: {datetime.now().strftime('%H:%M:%S')}", "size": "xs", "color": "#888888", "align": "center"}
+        ]
+      }
+    }
+    
+    return FlexSendMessage(alt_text="現在の在室状況リスト", contents=flex_content)
+
 def initialize_default_schedule():
     """DB初期化コマンド (Flask CLI) から実行する"""
     try:
