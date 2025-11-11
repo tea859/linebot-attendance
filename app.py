@@ -38,19 +38,17 @@ SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TO
 load_dotenv()
 app = Flask(__name__)
 
-# --- 1. データベース設定 (PostgreSQL/SQLite両対応) ---
+# ----------------------------------------------------------------------
+# 1. データベース設定 (PostgreSQL/SQLite両対応)
+# ----------------------------------------------------------------------
+
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///zaiseki.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False # Trueにすると実行SQLをコンソールに出力
 
 db = SQLAlchemy(app)
-# --- ▲ データベース設定ここまで ▲ ---
 
-# --- ▼▼▼ ここにLINE Bot設定を追加 ▼▼▼ ---
-# (LINE Developersコンソールから取得したキーを設定)
-# ⚠️ 環境変数（os.environ.get）から読み込むことを強く推奨します
-# --- ▼▼▼ LINE Bot設定 (修正) ▼▼▼ ---
 YOUR_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 YOUR_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 
@@ -63,9 +61,12 @@ else:
     line_bot_api = None 
     handler = None
     print("【WARNING】LINE Botのトークンが設定されていません。init-db を実行中...?")
-# --- ▲▲▲ 修正ここまで ▲▲▲ ---
 
-# --- 2. Flask-Login と Mail の設定 ---
+
+# ----------------------------------------------------------------------
+# 2. Flask-Login と Mail の設定 
+# ----------------------------------------------------------------------
+
 app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
 
 # .env からメール設定を読み込む
@@ -82,7 +83,9 @@ login_manager.login_view = 'login'
 login_manager.login_message = "このページにアクセスするにはログインが必要です。"
 login_manager.login_message_category = "error"
 
-# --- 3. ユーザーモデル (Flask-Login用) ---
+# ----------------------------------------------------------------------
+# 3. ユーザーモデル (Flask-Login用)
+# ----------------------------------------------------------------------
 
 class User(UserMixin):
     def __init__(self, id, username, password):
@@ -104,10 +107,25 @@ admin_user_db = {
 
 @login_manager.user_loader
 def load_user(user_id):
-    return admin_user_db.get(user_id)
+    # user_id は 'admin-1' または 'student-222521301' の形式で来る
+    
+    if user_id.startswith('admin-'):
+        # 管理者ユーザーを読み込む
+        admin_id = user_id.split('-')[1]
+        return admin_user_db.get(admin_id)
+        
+    elif user_id.startswith('student-'):
+        # 学生ユーザーを読み込む
+        try:
+            student_id = int(user_id.split('-')[1])
+            return 学生.query.get(student_id)
+        except:
+            return None
+    return None
 
-# --- 4. データベースモデル (ORM クラス) の定義 ---
-# (テーブル名・列名は日本語のままとします)
+# ----------------------------------------------------------------------
+# 4. データベースモデル (ORM クラス) の定義
+# ----------------------------------------------------------------------
 
 class 教室(db.Model):
     __tablename__ = '教室'
@@ -127,7 +145,7 @@ class 学生(UserMixin, db.Model):
     出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
     在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
     line_user = relationship("LineUser", back_populates="student", uselist=False, cascade="all, delete-orphan")
-    face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    face_data = relationship("face_auth", back_populates="student", uselist=False, cascade="all, delete-orphan")
 
     # 🚨 Flask-Loginのためのメソッドを追加
     def get_id(self):
@@ -253,6 +271,10 @@ class face_auth(db.Model):
     __tablename__ = 'face_auth'
     face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
+
+# ----------------------------------------------------------------------
+# 5. データベースに挿入
+# ----------------------------------------------------------------------
 
 @app.cli.command('init-db')
 def init_db_command():
@@ -486,7 +508,9 @@ def init_db_command():
         
     # --- データベース初期化完了 ---
 
-# --- 5. ヘルパー関数 (SQLAlchemy版) ---
+# ----------------------------------------------------------------------
+# 6. ヘルパー関数 (SQLAlchemy版)
+# ----------------------------------------------------------------------
 
 YOBI_MAP = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0}
 ROMAN_TO_INT = {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4}
@@ -677,6 +701,9 @@ def login():
     # GETリクエストの場合はログインページを表示
     return render_template("login.html")
 
+# ----------------------------------------------------------------------
+# 7.APIルート
+# ----------------------------------------------------------------------
 
 @app.route("/logout")
 @login_required  # ログインしている人だけがログアウトできる
@@ -721,7 +748,6 @@ def index():
                            category=category,
                            unresolved_alerts_count=unresolved_alerts_count)
 
-# --- 8. APIルート (SQLAlchemy版) ---
 @app.route('/api/schedule_update', methods=['POST'])
 def api_schedule_update():
     """
@@ -1940,6 +1966,79 @@ if handler:
             TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
         )
 
+# ----------------------------------------------------------------------
+# 11. 学生専用ポータル (Student Portal)
+# ----------------------------------------------------------------------
+
+@app.route("/student_login", methods=["GET", "POST"])
+def student_login():
+    """学生専用のログインページ"""
+    if current_user.is_authenticated:
+        # すでにログイン済みの場合
+        if current_user.get_id().startswith('student-'):
+            return redirect(url_for('my_portal'))
+        else:
+            return redirect(url_for('index')) # 管理者は管理画面へ
+
+    if request.method == "POST":
+        try:
+            student_id = int(request.form.get("student_id"))
+            password = request.form.get("password")
+            
+            student = 学生.query.get(student_id)
+            
+            # データベースにパスワードが設定されているか、ハッシュで一致するかを確認
+            if student and student.check_password(password):
+                login_user(student) # ⬅️ 学生としてログイン
+                return redirect(url_for('my_portal'))
+            else:
+                flash("学生IDまたはパスワードが間違っています。", "error")
+                
+        except ValueError:
+            flash("学生IDは数字で入力してください。", "error")
+        except Exception as e:
+            flash(f"ログインエラーが発生しました: {e}", "error")
+            
+    return render_template("student_login.html")
+
+
+@app.route("/my_portal")
+@login_required # ログイン必須
+def my_portal():
+    """学生専用ポータル (自分の情報だけ表示)"""
+    
+    # ログイン中のユーザーが学生かどうかをIDのプレフィックスで確認
+    if not current_user.get_id().startswith('student-'):
+        # もし管理者がアクセスしようとしたら、管理トップに強制移動
+        flash("管理者はこのページにアクセスできません。", "error")
+        return redirect(url_for('index'))
+    
+    # current_user は、load_userによって 学生 オブジェクトになっている
+    student_id = current_user.学生ID
+    student_name = current_user.学生名
+    
+    # 自分の出席サマリーデータを取得
+    # (my_attendanceルートのロジックを流用)
+    selected_kiki = get_current_kiki() # 現在の期を取得
+    
+    # (my_attendanceのロジックをここに簡略化して挿入)
+    # (※ 実際には /my_attendance のロジックを呼び出すか、再実装します)
+    # (※ ここでは仮のデータを渡します)
+    report_data = [] # 実際にはここで /my_attendance と同じDBクエリを実行
+    
+    return render_template("my_portal.html", 
+                           student_name=student_name,
+                           report_data=report_data, 
+                           selected_kiki=selected_kiki)
+
+
+@app.route("/student_logout")
+@login_required
+def student_logout():
+    """学生専用ログアウト"""
+    logout_user()
+    flash("ログアウトしました。", "success")
+    return redirect(url_for('student_login'))
 # --- 12. 実行 ---
 
 if __name__ == "__main__":
