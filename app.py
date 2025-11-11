@@ -2121,6 +2121,8 @@ def resolve_alert(record_id):
 
 # app.py 内の handle_message 関数
 
+# app.py の LINE Bot Webhook ハンドラ部分
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     """LINEのテキストメッセージを処理する"""
@@ -2128,65 +2130,130 @@ def handle_message(event):
     user_id = event.source.user_id
     now = datetime.now()
 
-    # 応答オブジェクトを None で初期化
+    # 応答オブジェクト（TextSendMessageまたはFlexSendMessage）
     response_message = None
-    # テキスト応答用の変数
+    # テキスト応答用の変数（Flex Message以外で使用）
     reply_message = "" 
 
-    # --- 1. アカウント登録処理 (早期リターン) ---
-    if received_text.startswith("登録:"):
-        # (登録ロジックはここで return されるため、このまま維持)
-        # ... (既存の登録ロジック) ...
-        # ... (return line_bot_api.reply_message(...))
-    
-    # --- 2. 遅刻/欠席の連絡処理 (早期リターン) ---
-    if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
-        # (連絡ロジックもここで return されるため、このまま維持)
-        # ... (既存の連絡ロジック) ...
-        # ... (return line_bot_api.reply_message(...))
-
-    # --- 3. Flex Message / Text Message の分岐 ---
-    
-    # 🚨 Flex Message コマンド (response_message に代入)
-    if received_text == "今日の時間割":
-        response_message = get_daily_schedule_for_line(user_id, day_offset=0) 
-    elif received_text == "明日の時間割":
-        response_message = get_daily_schedule_for_line(user_id, day_offset=1)
-    elif received_text in ["在室状況", "今誰がいる？"]:
-        active_sessions = db.session.query(
-            在室履歴.学生ID, 教室.教室名, 学生.学生名 
-        ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
-         .join(学生, 在室履歴.学生ID == 学生.学生ID)\
-         .filter(在室履歴.退室時刻 == None).all()
-        active_students_list = [(sname, rname or '教室不明') for sid, rname, sname in active_sessions]
-        response_message = create_in_room_list_flex_message(active_students_list)
-    elif received_text == "出席サマリー":
-        response_message = get_attendance_summary_for_line(user_id) 
-
-    # 🚨 Text Message コマンド (reply_message に代入)
-    elif received_text == "一時退出":
-        reply_message = process_temporary_exit(user_id) 
-    elif received_text == "戻りました":
-        reply_message = process_return_from_exit(user_id)
-    elif received_text == "最終退室":
-        reply_message = process_exit_record(user_id)
-    elif received_text == "退室": # 互換性のため
-        reply_message = process_exit_record(user_id)
-    elif received_text == "気温":
-        if sensor_data:
-             latest = sensor_data[-1]
-             reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
-        else:
-             reply_message = "センサーデータがまだありません。"
-    else:
-        # どのコマンドにも一致しない場合
-        reply_message = f"「{received_text}」を受け取りました。"
-
-    # --- 4. 応答の送信 (ロジック修正) ---
     try:
+        # --- 1. アカウント登録処理 (早期リターン) ---
+        # 応答：TextSendMessage
+        if received_text.startswith("登録:"):
+            try:
+                input_student_id = int(received_text.split(":")[1].strip())
+            except (IndexError, ValueError):
+                response_message = TextSendMessage(text="❌ 登録形式が正しくありません。「登録:学生ID」の形式で入力してください。")
+            else:
+                student = 学生.query.get(input_student_id)
+                if not student:
+                    response_message = TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。")
+                else:
+                    existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
+                    if existing_mapping:
+                        existing_mapping.student_id = input_student_id
+                        db.session.commit()
+                        response_message = TextSendMessage(text=f"✅ 登録情報を更新しました。\nあなたのID ({input_student_id}) が紐づきました。")
+                    else:
+                        new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
+                        db.session.add(new_mapping)
+                        db.session.commit()
+                        response_message = TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。")
+            
+            # 早期リターンで応答を送信
+            return line_bot_api.reply_message(event.reply_token, response_message)
+
+        # --- 2. 遅刻/欠席の連絡処理 (早期リターン) ---
+        # 応答：TextSendMessage
+        if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
+            
+            student_id = get_student_id_from_line_user(user_id)
+            if student_id is None:
+                response_message = TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。")
+            else:
+                report_type = "欠席" if received_text.startswith("欠席連絡:") else "遅刻"
+                try:
+                    reason = received_text.split(":", 1)[1].strip()
+                    if not reason: raise IndexError
+                except IndexError:
+                    response_message = TextSendMessage(text=f"❌ {report_type}連絡の理由を必ず記述してください。\n例: 「{report_type}連絡:腹痛のため」")
+                else:
+                    new_report = ReportRecord(
+                        student_id=student_id,
+                        report_type=report_type,
+                        reason=reason,
+                        report_date=datetime.now(),
+                        is_resolved=False
+                    )
+                    db.session.add(new_report)
+                    db.session.commit()
+                    student = 学生.query.get(student_id)
+                    
+                    # メール通知ロジック (try-exceptで囲む)
+                    try:
+                        admin_email = os.environ.get('MAIL_USERNAME')
+                        if admin_email:
+                            subject = f"📢 【{report_type}】連絡 - {student.学生名} ({student.学生ID})"
+                            body = (
+                                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
+                                f"区分: {report_type}\n"
+                                f"理由: {reason}\n"
+                                f"報告時刻: {new_report.report_date.strftime('%Y/%m/%d %H:%M:%S')}\n"
+                                f"\nWeb管理画面で確認:\n{request.url_root.replace('/callback', '')}alerts"
+                            )
+                            msg = Message(subject=subject, sender=admin_email, recipients=[admin_email])
+                            msg.body = body
+                            mail.send(msg)
+                            print(f"【INFO】管理者への{report_type}連絡メールを送信しました。")
+                    except Exception as mail_e:
+                        print(f"【ERROR】メール送信に失敗しました: {mail_e}")
+                    
+                    response_message = TextSendMessage(text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知しました。")
+
+            # 早期リターンで応答を送信
+            return line_bot_api.reply_message(event.reply_token, response_message)
+
+        # --- 3. Flex Message / Text Message の分岐 ---
+        
+        # 応答：FlexSendMessage
+        if received_text == "今日の時間割":
+            response_message = get_daily_schedule_for_line(user_id, day_offset=0) 
+        elif received_text == "明日の時間割":
+            response_message = get_daily_schedule_for_line(user_id, day_offset=1)
+        elif received_text in ["在室状況", "今誰がいる？"]:
+            active_sessions = db.session.query(
+                在室履歴.学生ID, 教室.教室名, 学生.学生名 
+            ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
+             .join(学生, 在室履歴.学生ID == 学生.学生ID)\
+             .filter(在室履歴.退室時刻 == None).all()
+            active_students_list = [(sname, rname or '教室不明') for sid, rname, sname in active_sessions]
+            response_message = create_in_room_list_flex_message(active_students_list)
+        elif received_text == "出席サマリー":
+            response_message = get_attendance_summary_for_line(user_id) 
+
+        # 応答：TextSendMessage (reply_message にテキストを代入)
+        elif received_text == "一時退出":
+            reply_message = process_temporary_exit(user_id) 
+        elif received_text == "戻りました":
+            reply_message = process_return_from_exit(user_id)
+        elif received_text == "最終退室":
+            reply_message = process_exit_record(user_id)
+        elif received_text == "退室": # 互換性のため
+            reply_message = process_exit_record(user_id)
+        elif received_text == "気温":
+            if sensor_data:
+                 latest = sensor_data[-1]
+                 reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+            else:
+                 reply_message = "センサーデータがまだありません。"
+        else:
+            # どのコマンドにも一致しない場合
+            reply_message = f"「{received_text}」を受け取りました。"
+
+        # --- 4. 応答の送信 ---
+        
         # A. Flex Messageが生成された場合
         if response_message:
-            # (この時点で response_message は FlexSendMessage または TextSendMessage のはず)
+            # (response_message は FlexSendMessage または TextSendMessage)
             line_bot_api.reply_message(event.reply_token, response_message)
         
         # B. Text Messageが生成された場合
@@ -2206,17 +2273,19 @@ def handle_message(event):
             )
         # C. どちらも空の場合は応答しない（エラー回避）
         else:
-            # ログに記録（デバッグ用）
             print(f"INFO: 応答メッセージが生成されなかったため、応答しませんでした。 (受信テキスト: {received_text})")
 
     except Exception as e:
         # 予期せぬエラー（LineBotApiErrorなど）をキャッチ
-        print(f"ERROR in handle_message send block: {e}")
+        print(f"ERROR in handle_message: {e}")
         # ユーザーにはエラーを通知（任意）
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"エラーが発生しました: {e}")
-        )
+        try:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"エラーが発生しました: {e}")
+            )
+        except Exception as reply_e:
+             print(f"ERROR: 返信の送信にも失敗しました: {reply_e}")
 
 # --- 12. 実行 ---
 
