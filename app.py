@@ -883,6 +883,19 @@ def api_update_status():
         print(f"FATAL API ERROR (update_status): {e}")
         return jsonify({"error": f"サーバー内部エラー: {e}"}), 500
 
+@app.route('/api/alerts_count')
+@login_required # ログインしているユーザーのみが件数を取得できるようにする
+def api_alerts_count():
+    """(API) 未確認の遅刻・欠席連絡の件数をJSONで返す"""
+    try:
+        # データベースから未解決(is_resolved == False)の件数をカウント
+        count = db.session.query(ReportRecord.record_id).filter(ReportRecord.is_resolved == False).count()
+        return jsonify({'count': count})
+    except Exception as e:
+        app.logger.error(f"アラート件数のカウントに失敗: {e}")
+        # エラーが起きても、フロントエンドがクラッシュしないように 0 を返す
+        return jsonify({'count': 0, 'error': str(e)}), 500
+
 @app.route("/api/status")
 def api_status():
     """(ダッシュボードAPI) リアルタイム在室状況を返す (ORM版)"""

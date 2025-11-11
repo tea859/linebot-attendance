@@ -116,11 +116,13 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     {% endif %}
                 </div>
-                <span class="text-lg font-semibold text-gray-800 relative"> {{ link.name }}
+                <span class="text-lg font-semibold text-gray-800 relative">
+                    {{ link.name }}
 
-                    {% if link.name == "📢 遅刻・欠席連絡 掲示板" and unresolved_alerts_count > 0 %}
+                    {% if link.name == "📢 遅刻・欠席連絡 掲示板" %}
                         
-                        <span class="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                        <span id="alert-badge"
+                            class="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
                             {{ unresolved_alerts_count }}
                         </span>
                     

@@ -54,12 +54,49 @@ function updateStatus() {
     });
 }
 
+async function updateAlertBadge() {
+    try {
+        const response = await fetch('/api/alerts_count');
+        
+        // ユーザーがログアウトした場合やサーバーエラーの場合は何もしない
+        if (!response.ok) {
+            return; 
+        }
+
+        const data = await response.json();
+        const count = data.count;
+        
+        const badge = document.getElementById('alert-badge');
+        if (!badge) return; // ページにバッジ要素がなければ終了
+
+        // 件数に基づいてバッジの表示を切り替える
+        if (count > 0) {
+            badge.textContent = count;
+            badge.classList.remove('hidden'); // hiddenクラスを削除して表示
+        } else {
+            badge.textContent = '0';
+            badge.classList.add('hidden'); // hiddenクラスを追加して非表示
+        }
+
+    } catch (error) {
+        // ネットワークエラーなどでフェッチに失敗した場合
+        console.error('Error fetching alert count:', error);
+        const badge = document.getElementById('alert-badge');
+        if (badge) {
+            badge.textContent = '?'; // エラー表示
+            badge.classList.remove('hidden');
+        }
+    }
+}
+
 console.log("script.js 読み込まれました");
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOM構築完了");
   updateSensorDisplay();
   updateStatus();
+  updateAlertBadge();
   setInterval(updateSensorDisplay, 1000);
   setInterval(updateStatus, 1000);
+  setInterval(updateAlertBadge,5000);
 });
