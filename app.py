@@ -271,6 +271,7 @@ class face_auth(db.Model):
     __tablename__ = 'face_auth'
     face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
+    student = relationship("学生", backref="line_user", uselist=False)
 
 # ----------------------------------------------------------------------
 # 5. データベースに挿入
