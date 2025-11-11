@@ -6,6 +6,7 @@ from collections import OrderedDict
 from urllib.parse import quote
 # ... (Flask, datetime, csv などのimport) ...
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Flask-Mail
 from flask_mail import Mail, Message
@@ -87,7 +88,12 @@ class User(UserMixin):
     def __init__(self, id, username, password):
         self.id = id
         self.username = username
-        self.password = password
+        self.password = password # 🚨 注意: 管理者パスワードはハッシュ化されていません
+        
+    # 🚨 get_idメソッドを追加
+    def get_id(self):
+        # ユーザーIDとして「admin-」というプレフィックスを付けて返す
+        return f"admin-{self.id}"
 
 admin_user_db = {
     "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
@@ -109,12 +115,34 @@ class 教室(db.Model):
     教室名 = db.Column(db.String, nullable=False)
     授業s = db.relationship('授業', back_populates='教室')
 
-class 学生(db.Model):
+class 学生(UserMixin, db.Model):
     __tablename__ = '学生'
     学生ID = db.Column(db.Integer, primary_key=True)
     学生名 = db.Column(db.String, nullable=False, unique=True)
+    
+    # 🚨 新規追加: 学生用のパスワードハッシュを保存するカラム
+    password_hash = db.Column(db.String(256), nullable=True) 
+
+    # (既存のリレーションシップ定義はそのまま)
     出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
     在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
+    line_user = relationship("LineUser", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
+
+    # 🚨 Flask-Loginのためのメソッドを追加
+    def get_id(self):
+        # ユーザーIDとして「student-」というプレフィックスを付けて返す
+        return f"student-{self.学生ID}"
+
+    def set_password(self, password):
+        # パスワードをハッシュ化して保存
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        # ハッシュ化されたパスワードと一致するかチェック
+        if self.password_hash is None:
+            return False
+        return check_password_hash(self.password_hash, password)
 
 class 授業(db.Model):
     __tablename__ = '授業'
