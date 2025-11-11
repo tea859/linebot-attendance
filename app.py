@@ -282,6 +282,7 @@ def init_db_command():
     with app.app_context():
             
         # 2. すべてのテーブルを作成/再作成（在室履歴には「備考」が追加される）
+        db.drop_all()
         db.create_all()
         print("データベース初期化完了。")
         
