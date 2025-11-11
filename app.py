@@ -23,8 +23,16 @@ from linebot.exceptions import (
 )
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction,
-    FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, SeparatorComponent, 
-    Spacer, ImageComponent,
+    FlexSendMessage, BubbleContainer, 
+    
+    # ⬇️ 最終的な修正: Component サフィックスを追加
+    BoxComponent, TextComponent, SeparatorComponent, 
+    
+    # ❌ 以前の Spacer は削除
+    SpacerComponent, # ⬅️ SpacerComponent に戻す！
+
+    # ImageComponent はそのまま
+    ImageComponent, 
 )
 from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
