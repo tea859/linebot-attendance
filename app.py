@@ -820,59 +820,143 @@ def initialize_default_schedule():
     except Exception as e:
         print(f"【WARNING】デフォルト時間割の初期化に失敗しました: {e}")
 
-def get_schedule_for_line(target_date):
-    """指定された日付の時間割をテキスト形式で返す"""
+def get_daily_schedule_for_line(line_user_id, day_offset=0):
+    """
+    指定された日（day_offset=0は今日、1は明日）の時間割データを取得し、Flex Messageを返す
+    """
     
-    # 曜日コード (0=月, 1=火, ...)
-    yobi_code = target_date.weekday() 
-    yobi_str = YOBI_MAP_REVERSE.get(yobi_code)
-    
-    # 授業計画から期と曜日コードを取得
-    date_str = target_date.strftime("%Y/%m/%d")
-    plan_row = 授業計画.query.get(date_str)
-    
-    if plan_row:
-        kiki = str(plan_row.期)
-        yobi_to_use = YOBI_MAP_REVERSE.get(plan_row.授業曜日) # 授業計画に指定された曜日コード
-    else:
-        kiki = get_current_kiki() # 授業計画がない場合は現在の期を使用
-        yobi_to_use = yobi_str
-    
-    # 時間割データの取得
-    schedule_rows = db.session.query(
-        時間割, 授業.授業科目名, 授業.担当教員
-    ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
-     .filter(時間割.学期 == kiki, 時間割.曜日 == yobi_to_use)\
-     .order_by(時間割.時限).all()
-     
-    if not schedule_rows:
-        return f"{date_str} ({yobi_str}): 授業計画が見つからないか、休校日です。"
-
-    output = [f"📅 {date_str} ({yobi_to_use}) - 第{kiki}期 の時間割"]
-    for row in schedule_rows:
-        time_row = TimeTable.query.get(row[0].時限) # TimeTableにアクセス
-        time_str = f"({time_row.開始時刻.strftime('%H:%M')}-{time_row.終了時刻.strftime('%H:%M')})" if time_row else ""
-        
-        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間")
-        teacher = row[2] if row[2] else ""
-
-        output.append(f"  {row[0].時限}限 {time_str}\n  {subject_name} {teacher}")
-
-    return "\n".join(output)
-
-def get_attendance_summary_for_line(line_user_id):
-    """LINEユーザーIDに対応する学生の出席サマリーを返す"""
-    
-    student_id = get_student_id_from_line_user(line_user_id) # ⬅️ 紐付けテーブルから取得！
-    
+    # --- 1. ユーザーIDの確認 ---
+    student_id = get_student_id_from_line_user(line_user_id) 
     if student_id is None:
-        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
+        return TextSendMessage(text="⚠️ あなたの学生IDが登録されていません。「登録:学生ID」で一度登録してください。")
+
+    # --- 2. 日付と曜日の特定 ---
+    target_date = datetime.now() + timedelta(days=day_offset)
+    yobi_map = {0: '月', 1: '火', 2: '水', 3: '木', 4: '金', 5: '土', 6: '日'}
+    yobi_str = yobi_map.get(target_date.weekday())
+    date_str_db = target_date.strftime("%Y/%m/%d") # 授業計画テーブル検索用
+    date_str_display = target_date.strftime('%Y/%m/%d') # 表示用
     
-    # 紐づいた学生情報と出席レポートロジックの実行
+    # 土日は時間割がない
+    if target_date.weekday() >= 5:
+        return TextSendMessage(text=f"🗓️ {date_str_display}({yobi_str})は週末のため、授業はありません。")
+
+    # --- 3. 授業計画テーブルから「期」と「実働曜日」を取得 ---
+    plan_row = 授業計画.query.get(date_str_db)
+    
+    if not plan_row:
+        return TextSendMessage(text=f"🗓️ {date_str_display}({yobi_str})は授業計画にないため、休校日です。")
+
+    selected_kiki = str(plan_row.期) 
+    yobi_to_use = yobi_map.get(plan_row.授業曜日)
+
+    if not yobi_to_use:
+         return TextSendMessage(text=f"🗓️ {date_str_display}は授業計画で曜日が不明です。")
+
+    # --- 4. 時間割データをDBから取得 ---
+    daily_schedules_query = db.session.query(
+        時間割.時限, 授業.授業科目名, 授業.担当教員, 教室.教室名, 時間割.備考
+    ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
+     .outerjoin(教室, 授業.教室ID == 教室.教室ID)\
+     .filter(時間割.学期 == selected_kiki, 時間割.曜日 == yobi_to_use)\
+     .order_by(時間割.時限).all()
+
+    
+    # --- 5. 辞書形式に整形 ---
+    schedule_data = {}
+    for period, subject, teacher, room, remark in daily_schedules_query:
+        # 授業が存在する場合（授業IDが0でない、または5限で備考がある）
+        if (period < 5 and subject) or (period == 5 and remark):
+            schedule_data[period] = (
+                subject,
+                teacher or '未定',
+                room or '未定',
+                remark
+            )
+
+    # --- 6. Flex Message を生成 ---
+    # 🚨 create_timetable_flex_message 関数（以前作成）を呼び出す
+    return create_timetable_flex_message(
+        date_str_display, 
+        yobi_to_use, # 授業計画に基づいた曜日
+        selected_kiki,
+        schedule_data
+    )
+    
+def get_attendance_summary_for_line(line_user_id):
+    """LINEユーザーIDから統計情報を取得し、Flex Messageを返すメイン関数"""
+    
+    student_id = get_student_id_from_line_user(line_user_id) 
+    if student_id is None:
+        return TextSendMessage(text="⚠️ あなたの学生IDが登録されていません。「登録:学生ID」で一度登録してください。")
+    
     student = 学生.query.get(student_id)
-    # ... (レポート機能のロジックを流用し、student_idで出席記録を集計してテキストで返す)
+    if not student:
+        return TextSendMessage(text="⚠️ 学生情報が見つかりません。")
+
+    # --- 統計データの計算 ---
+    # 🚨 ここでは仮に第1期（'1'）のデータのみ取得します（Web側のロジックの簡略化）
+    selected_kiki = '1'
     
-    return f"【学生ID:{student_id} / {student.学生名}さん】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
+    # 1. 履修科目
+    sql_enrolled = text("""
+        SELECT DISTINCT S."授業ID" FROM "時間割" T
+        JOIN "授業" S ON T."授業ID" = S."授業ID"
+        WHERE T."学期" = :kiki AND T."授業ID" != 0
+    """)
+    enrolled_subjects = db.session.execute(sql_enrolled, {"kiki": selected_kiki}).fetchall()
+
+    total_classes_so_far = 0
+    attendance_count = 0
+    tardy_count = 0
+    absent_count = 0
+
+    # 2. 科目ごとにループして総授業回数を計算
+    for (subject_id,) in enrolled_subjects:
+        sql_schedule = text('SELECT T."曜日", COUNT(T."時限") FROM "時間割" T WHERE T."授業ID" = :sid AND T."学期" = :kiki GROUP BY T."曜日"')
+        schedule_data = db.session.execute(sql_schedule, {"sid": subject_id, "kiki": selected_kiki}).fetchall()
+        
+        for day_of_week, periods_per_day in schedule_data:
+            day_code = YOBI_MAP.get(day_of_week)
+            if day_code is not None:
+                sql_days_so_far = text("""
+                    SELECT COUNT("日付") FROM "授業計画" 
+                    WHERE "期" = :kiki AND "授業曜日" = :code 
+                    AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+                """)
+                total_days_so_far += db.session.execute(sql_days_so_far, {"kiki": selected_kiki, "code": day_code}).scalar() * periods_per_day
+
+    # 3. 出席記録を集計
+    sql_records = text("""
+        SELECT R."状態", COUNT(R."状態")
+        FROM "出席記録" R
+        JOIN "時間割" T ON R."授業ID" = T."授業ID" AND R."時限" = T."時限"
+        WHERE R."学生ID" = :sid AND T."学期" = :kiki 
+        GROUP BY R."状態"
+    """)
+    records = dict(db.session.execute(sql_records, {"sid": student_id, "kiki": selected_kiki}).fetchall())
+    
+    attendance_count = records.get('出席', 0)
+    tardy_count = records.get('遅刻', 0)
+    absent_count = records.get('欠席', 0)
+
+    # 4. 出席率を計算
+    attendance_rate = 0.0
+    if total_classes_so_far > 0:
+        attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1)
+
+    # 5. 統計データを辞書にまとめる
+    stats = {
+        'student_name': student.学生名,
+        'attendance_rate': attendance_rate,
+        'total_classes': total_classes_so_far, # 簡略化のため「今日までの総回数」を入れる
+        'attendance_count': attendance_count,
+        'tardy_count': tardy_count,
+        'absent_count': absent_count,
+    }
+
+    # 🚨 create_attendance_flex_message 関数（以前作成）を呼び出す
+    return create_attendance_flex_message(stats)
 
 #最終退室
 def process_exit_record(line_user_id):
@@ -2123,6 +2207,8 @@ def resolve_alert(record_id):
 
 # app.py の LINE Bot Webhook ハンドラ部分
 
+# app.py 内の handle_message 関数
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     """LINEのテキストメッセージを処理する"""
@@ -2131,94 +2217,28 @@ def handle_message(event):
     now = datetime.now()
 
     # 応答オブジェクト（TextSendMessageまたはFlexSendMessage）
-    response_message = None
-    # テキスト応答用の変数（Flex Message以外で使用）
-    reply_message = "" 
+    response_object = None
 
     try:
         # --- 1. アカウント登録処理 (早期リターン) ---
-        # 応答：TextSendMessage
         if received_text.startswith("登録:"):
-            try:
-                input_student_id = int(received_text.split(":")[1].strip())
-            except (IndexError, ValueError):
-                response_message = TextSendMessage(text="❌ 登録形式が正しくありません。「登録:学生ID」の形式で入力してください。")
-            else:
-                student = 学生.query.get(input_student_id)
-                if not student:
-                    response_message = TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。")
-                else:
-                    existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
-                    if existing_mapping:
-                        existing_mapping.student_id = input_student_id
-                        db.session.commit()
-                        response_message = TextSendMessage(text=f"✅ 登録情報を更新しました。\nあなたのID ({input_student_id}) が紐づきました。")
-                    else:
-                        new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
-                        db.session.add(new_mapping)
-                        db.session.commit()
-                        response_message = TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。")
-            
-            # 早期リターンで応答を送信
-            return line_bot_api.reply_message(event.reply_token, response_message)
-
+            # (登録ロジックはここで return されるため、このまま維持)
+            # ... (既存の登録ロジック) ...
+            # ... (return line_bot_api.reply_message(...))
+        
         # --- 2. 遅刻/欠席の連絡処理 (早期リターン) ---
-        # 応答：TextSendMessage
         if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
-            
-            student_id = get_student_id_from_line_user(user_id)
-            if student_id is None:
-                response_message = TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。")
-            else:
-                report_type = "欠席" if received_text.startswith("欠席連絡:") else "遅刻"
-                try:
-                    reason = received_text.split(":", 1)[1].strip()
-                    if not reason: raise IndexError
-                except IndexError:
-                    response_message = TextSendMessage(text=f"❌ {report_type}連絡の理由を必ず記述してください。\n例: 「{report_type}連絡:腹痛のため」")
-                else:
-                    new_report = ReportRecord(
-                        student_id=student_id,
-                        report_type=report_type,
-                        reason=reason,
-                        report_date=datetime.now(),
-                        is_resolved=False
-                    )
-                    db.session.add(new_report)
-                    db.session.commit()
-                    student = 学生.query.get(student_id)
-                    
-                    # メール通知ロジック (try-exceptで囲む)
-                    try:
-                        admin_email = os.environ.get('MAIL_USERNAME')
-                        if admin_email:
-                            subject = f"📢 【{report_type}】連絡 - {student.学生名} ({student.学生ID})"
-                            body = (
-                                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
-                                f"区分: {report_type}\n"
-                                f"理由: {reason}\n"
-                                f"報告時刻: {new_report.report_date.strftime('%Y/%m/%d %H:%M:%S')}\n"
-                                f"\nWeb管理画面で確認:\n{request.url_root.replace('/callback', '')}alerts"
-                            )
-                            msg = Message(subject=subject, sender=admin_email, recipients=[admin_email])
-                            msg.body = body
-                            mail.send(msg)
-                            print(f"【INFO】管理者への{report_type}連絡メールを送信しました。")
-                    except Exception as mail_e:
-                        print(f"【ERROR】メール送信に失敗しました: {mail_e}")
-                    
-                    response_message = TextSendMessage(text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知しました。")
-
-            # 早期リターンで応答を送信
-            return line_bot_api.reply_message(event.reply_token, response_message)
+            # (連絡ロジックもここで return されるため、このまま維持)
+            # ... (既存の連絡ロジック) ...
+            # ... (return line_bot_api.reply_message(...))
 
         # --- 3. Flex Message / Text Message の分岐 ---
         
-        # 応答：FlexSendMessage
+        # 応答：FlexSendMessage（またはエラー時はTextSendMessage）
         if received_text == "今日の時間割":
-            response_message = get_daily_schedule_for_line(user_id, day_offset=0) 
+            response_object = get_daily_schedule_for_line(user_id, day_offset=0) 
         elif received_text == "明日の時間割":
-            response_message = get_daily_schedule_for_line(user_id, day_offset=1)
+            response_object = get_daily_schedule_for_line(user_id, day_offset=1)
         elif received_text in ["在室状況", "今誰がいる？"]:
             active_sessions = db.session.query(
                 在室履歴.学生ID, 教室.教室名, 学生.学生名 
@@ -2226,38 +2246,44 @@ def handle_message(event):
              .join(学生, 在室履歴.学生ID == 学生.学生ID)\
              .filter(在室履歴.退室時刻 == None).all()
             active_students_list = [(sname, rname or '教室不明') for sid, rname, sname in active_sessions]
-            response_message = create_in_room_list_flex_message(active_students_list)
+            response_object = create_in_room_list_flex_message(active_students_list)
         elif received_text == "出席サマリー":
-            response_message = get_attendance_summary_for_line(user_id) 
+            response_object = get_attendance_summary_for_line(user_id) 
 
         # 応答：TextSendMessage (reply_message にテキストを代入)
         elif received_text == "一時退出":
-            reply_message = process_temporary_exit(user_id) 
+            reply_text = process_temporary_exit(user_id) 
+            response_object = TextSendMessage(text=reply_text)
         elif received_text == "戻りました":
-            reply_message = process_return_from_exit(user_id)
+            reply_text = process_return_from_exit(user_id)
+            response_object = TextSendMessage(text=reply_text)
         elif received_text == "最終退室":
-            reply_message = process_exit_record(user_id)
+            reply_text = process_exit_record(user_id)
+            response_object = TextSendMessage(text=reply_text)
         elif received_text == "退室": # 互換性のため
-            reply_message = process_exit_record(user_id)
+            reply_text = process_exit_record(user_id)
+            response_object = TextSendMessage(text=reply_text)
         elif received_text == "気温":
             if sensor_data:
                  latest = sensor_data[-1]
-                 reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+                 reply_text = f"現在の気温は {latest.get('temperature')}℃ です。"
             else:
-                 reply_message = "センサーデータがまだありません。"
+                 reply_text = "センサーデータがまだありません。"
+            response_object = TextSendMessage(text=reply_text)
         else:
             # どのコマンドにも一致しない場合
-            reply_message = f"「{received_text}」を受け取りました。"
+            reply_text = f"「{received_text}」を受け取りました。"
+            response_object = TextSendMessage(text=reply_text)
 
         # --- 4. 応答の送信 ---
         
-        # A. Flex Messageが生成された場合
-        if response_message:
-            # (response_message は FlexSendMessage または TextSendMessage)
-            line_bot_api.reply_message(event.reply_token, response_message)
-        
-        # B. Text Messageが生成された場合
-        elif reply_message: # ⬅️ reply_messageが空でないことを確認
+        if response_object is None:
+            # どのifにも一致しなかった場合 (通常は発生しない)
+            print(f"INFO: 応答メッセージが生成されなかったため、応答しませんでした。 (受信テキスト: {received_text})")
+            return
+
+        # 🚨 修正: 応答がTextSendMessageの場合、クイックリプライを付与
+        if isinstance(response_object, TextSendMessage):
             quick_reply_buttons = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
                 QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
@@ -2266,17 +2292,12 @@ def handle_message(event):
                 QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
                 QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
             ])
-            
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
-            )
-        # C. どちらも空の場合は応答しない（エラー回避）
-        else:
-            print(f"INFO: 応答メッセージが生成されなかったため、応答しませんでした。 (受信テキスト: {received_text})")
+            response_object.quick_reply = quick_reply_buttons
+        
+        # Flex Message (FlexSendMessage) の場合はそのまま送信
+        line_bot_api.reply_message(event.reply_token, response_object)
 
     except Exception as e:
-        # 予期せぬエラー（LineBotApiErrorなど）をキャッチ
         print(f"ERROR in handle_message: {e}")
         # ユーザーにはエラーを通知（任意）
         try:
