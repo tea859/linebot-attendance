@@ -1,11 +1,10 @@
 import os
-import io
-import csv
-from dotenv import load_dotenv
+from dotenv import load_dotenv # ⬅️ これを追加
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime, timedelta
 from collections import OrderedDict
 from urllib.parse import quote
+# ... (Flask, datetime, csv などのimport) ...
 from functools import wraps
 
 # Flask-Mail
@@ -14,7 +13,6 @@ from flask_mail import Mail, Message
 # Flask-Login
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
-# LINE Bot SDK (Flex Message関連を削除)
 from linebot import (
     LineBotApi, WebhookHandler
 )
@@ -22,45 +20,54 @@ from linebot.exceptions import (
     InvalidSignatureError
 )
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, 
-    QuickReply, QuickReplyButton, MessageAction
+    MessageEvent, TextMessage, TextSendMessage,
 )
+from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
-# SQLAlchemy
+# --- ▼ SQLAlchemy (B案) に変更 ▼ ---
 from flask_sqlalchemy import SQLAlchemy
+# 以下の行が重要です。必要な型と関数だけをインポートします。
 from sqlalchemy import Integer, String, ForeignKey, func, UniqueConstraint, text, Column, Computed 
 from sqlalchemy import Time as SQLTime, DateTime as SQLDateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
-
-# --- グローバル変数・設定 ---
+# --- ▲ SQLAlchemy に変更 ▲ ---
+TEMP_EXIT_STATUS = "一時退出中"
+SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TOKEN_HERE')
 load_dotenv()
 app = Flask(__name__)
 
-# 秘密鍵・トークン
-app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
-SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TOKEN_HERE')
-TEMP_EXIT_STATUS = "一時退出中" # 在室履歴の備考欄用
-
-# データベース設定
+# --- 1. データベース設定 (PostgreSQL/SQLite両対応) ---
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///zaiseki.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+app.config['SQLALCHEMY_ECHO'] = False # Trueにすると実行SQLをコンソールに出力
 
-# --- LINE Bot API 初期化 ---
+db = SQLAlchemy(app)
+# --- ▲ データベース設定ここまで ▲ ---
+
+# --- ▼▼▼ ここにLINE Bot設定を追加 ▼▼▼ ---
+# (LINE Developersコンソールから取得したキーを設定)
+# ⚠️ 環境変数（os.environ.get）から読み込むことを強く推奨します
+# --- ▼▼▼ LINE Bot設定 (修正) ▼▼▼ ---
 YOUR_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 YOUR_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
 
+# (キーが存在する場合のみAPIを初期化する)
 if YOUR_CHANNEL_ACCESS_TOKEN and YOUR_CHANNEL_SECRET:
     line_bot_api = LineBotApi(YOUR_CHANNEL_ACCESS_TOKEN)
     handler = WebhookHandler(YOUR_CHANNEL_SECRET)
 else:
+    # (init-db 実行時など、キーがない場合はダミーで初期化)
     line_bot_api = None 
     handler = None
-    print("【WARNING】LINE Botのトークンが設定されていません。")
+    print("【WARNING】LINE Botのトークンが設定されていません。init-db を実行中...?")
+# --- ▲▲▲ 修正ここまで ▲▲▲ ---
 
-# --- Flask-Mail 設定 ---
+# --- 2. Flask-Login と Mail の設定 ---
+app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
+
+# .env からメール設定を読み込む
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 465
 app.config['MAIL_USE_SSL'] = True
@@ -68,12 +75,13 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 mail = Mail(app)
 
-# --- Flask-Login 設定 ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login' 
 login_manager.login_message = "このページにアクセスするにはログインが必要です。"
 login_manager.login_message_category = "error"
+
+# --- 3. ユーザーモデル (Flask-Login用) ---
 
 class User(UserMixin):
     def __init__(self, id, username, password):
@@ -85,13 +93,15 @@ admin_user_db = {
     "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
 }
 
+# app.py 内の関数
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return admin_user_db.get(user_id)
 
-# ----------------------------------------------------------------------
-# 1. データベースモデル (DB Models)
-# ----------------------------------------------------------------------
+# --- 4. データベースモデル (ORM クラス) の定義 ---
+# (テーブル名・列名は日本語のままとします)
 
 class 教室(db.Model):
     __tablename__ = '教室'
@@ -105,9 +115,6 @@ class 学生(db.Model):
     学生名 = db.Column(db.String, nullable=False, unique=True)
     出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
     在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
-    # 1対1の紐付け
-    line_user = relationship("LineUser", back_populates="student", uselist=False, cascade="all, delete-orphan")
-    face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
 
 class 授業(db.Model):
     __tablename__ = '授業'
@@ -122,8 +129,8 @@ class 授業(db.Model):
 class TimeTable(db.Model):
     __tablename__ = 'TimeTable'
     時限 = db.Column(db.Integer, primary_key=True)
-    開始時刻 = db.Column(SQLTime, nullable=False)
-    終了時刻 = db.Column(SQLTime, nullable=False)
+    開始時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
+    終了時刻 = db.Column(SQLTime, nullable=False) # ⬅️ SQLTime に変更
     備考 = db.Column(db.String)
 
 class 授業計画(db.Model):
@@ -146,15 +153,21 @@ class 時間割(db.Model):
 
 class 出席記録(db.Model):
     __tablename__ = '出席記録'
+    # 以前のスキーマ (PRAGMAの結果) に合わせ、PKはROWIDに依存 (autoincrement=True)
     ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
     学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
     授業ID = db.Column(db.Integer, db.ForeignKey('授業.授業ID', ondelete='CASCADE'), nullable=False)
     出席時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now)
     状態 = db.Column(db.String, nullable=False) 
     時限 = db.Column(db.Integer, nullable=False)
+    
     出席日付 = Column(SQLDateTime, Computed(func.date(出席時刻)))
+
     学生 = db.relationship('学生', back_populates='出席記録s')
     授業 = db.relationship('授業', back_populates='出席記録s')
+    
+    # データベース側で日付を抽出する関数 func.date() を使用
+    # これにより SQLite と PostgreSQL の両方で動作
     __table_args__ = (
         UniqueConstraint('学生ID', '授業ID', '時限', '出席日付', name='_student_class_period_date_uc'),
     )
@@ -164,9 +177,11 @@ class 在室履歴(db.Model):
     履歴ID = db.Column(db.Integer, primary_key=True, autoincrement=True)
     学生ID = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), nullable=False)
     教室ID = db.Column(db.Integer, db.ForeignKey('教室.教室ID'))
-    入室時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now)
-    退室時刻 = db.Column(SQLDateTime, nullable=True)
-    備考 = db.Column(db.String(50), nullable=True) # ⬅️ 一時退出用
+    入室時刻 = db.Column(SQLDateTime, nullable=False, default=datetime.now) # ⬅️ SQLDateTime に変更
+    退室時刻 = db.Column(SQLDateTime, nullable=True) # ⬅️ SQLDateTime に変更
+
+    備考 = db.Column(db.String(50), nullable=True)
+    
     学生 = db.relationship('学生', back_populates='在室履歴s')
     教室 = db.relationship('教室', foreign_keys=[教室ID])
 
@@ -182,38 +197,34 @@ class 時間割_デフォルト(db.Model):
 
 class LineUser(db.Model):
     __tablename__ = 'line_user'
+    
+    # LINEのユーザーIDは非常に長い文字列（約33文字）
     line_user_id = db.Column(db.String(50), primary_key=True) 
+    
+    # 学生テーブルと紐づける
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), unique=True, nullable=False)
-    student = relationship("学生", back_populates="line_user")
+    
+    # リレーションシップの定義（学生IDから学生情報を参照できるようにする）
+    student = relationship("学生", backref="line_user", uselist=False)
+
+    def __repr__(self):
+        return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
 
 class ReportRecord(db.Model):
     __tablename__ = 'report_record'
     record_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
     report_type = db.Column(db.String(10), nullable=False) # '遅刻' or '欠席'
-    reason = db.Column(db.String(500), nullable=True)
+    reason = db.Column(db.String(500), nullable=True) # 連絡理由
     report_date = db.Column(SQLDateTime, nullable=False, default=datetime.now)
-    is_resolved = db.Column(db.Boolean, default=False)
-    student = relationship("学生")
+    is_resolved = db.Column(db.Boolean, default=False) # 管理者確認済みフラグ
+    
+    student = relationship("学生") # 学生情報を参照
 
-class CommandQueue(db.Model):
-    __tablename__ = 'command_queue'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    command_type = db.Column(db.String(50), nullable=False) # 例: 'CHECK', 'RESET'
-    status = db.Column(db.String(20), default='PENDING')
-    created_at = db.Column(SQLDateTime, default=datetime.now)
-
-# (顔認証用のモデル - 簡略版)
-class FaceData(db.Model):
-    __tablename__ = 'face_data'
-    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), primary_key=True)
-    face_encoding = db.Column(db.Text, nullable=False) 
-    student = relationship("学生", back_populates="face_data")
-
-
-# ----------------------------------------------------------------------
-# 2. データベース初期化 (Flask CLI)
-# ----------------------------------------------------------------------
+class face_auth(db.Model):
+    __tablename__ = 'face_auth'
+    face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
 
 @app.cli.command('init-db')
 def init_db_command():
@@ -447,31 +458,24 @@ def init_db_command():
         
     # --- データベース初期化完了 ---
 
-
-
-# ----------------------------------------------------------------------
-# 3. ヘルパー関数 (Helper Functions)
-# ----------------------------------------------------------------------
+# --- 5. ヘルパー関数 (SQLAlchemy版) ---
 
 YOBI_MAP = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0}
+ROMAN_TO_INT = {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4}
 YOBI_MAP_REVERSE = {v: k for k, v in YOBI_MAP.items()}
 
 def get_current_kiki():
-    """現在の日付から期を自動判定する"""
-    try:
-        current_kiki_record = db.session.query(授業計画.期) \
-            .filter(text("TO_DATE(REPLACE(授業計画.\"日付\", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE")) \
-            .order_by(text("TO_DATE(REPLACE(授業計画.\"日付\", '/', '-'), 'YYYY-MM-DD') DESC")) \
-            .first()
-        return str(current_kiki_record[0]) if current_kiki_record else "1"
-    except Exception:
-        return "1" # DBエラー時は1を返す
+    now = datetime.now()
+    today_str = f"{now.year}/{now.month}/{now.day}"
+    result = 授業計画.query.filter_by(日付=today_str).first()
+    return str(result.期) if result else "1"
 
 def initialize_default_schedule():
     """DB初期化コマンド (Flask CLI) から実行する"""
     try:
         with app.app_context():
             db.create_all()
+            
             with db.engine.connect() as conn:
                 result = conn.execute(text("SELECT COUNT(*) FROM \"時間割_デフォルト\"")).fetchone()
                 if result[0] == 0:
@@ -481,91 +485,59 @@ def initialize_default_schedule():
     except Exception as e:
         print(f"【WARNING】デフォルト時間割の初期化に失敗しました: {e}")
 
-def 判定(時限, 登録時刻):
-    row = TimeTable.query.get(時限)
-    if not row: return "未定義"
-    開始 = datetime.combine(登録時刻.date(), row.開始時刻)
-    経過 = (登録時刻 - 開始).total_seconds() / 60
-    if 経過 <= 0: return "出席"
-    elif 経過 <= 20: return "遅刻"
-    else: return "欠席"
-
-def get_student_id_from_line_user(line_user_id):
-    """LINE User IDから学生IDを取得する"""
-    mapping = LineUser.query.filter_by(line_user_id=line_user_id).first()
-    return mapping.student_id if mapping else None
-
-# --- LINE Bot用 ヘルパー関数 (テキスト版) ---
-
-def get_daily_schedule_for_line(line_user_id, day_offset=0):
-    """(テキスト版) 時間割データを取得し、文字列を返す"""
-    student_id = get_student_id_from_line_user(line_user_id)
-    if student_id is None:
-        return "⚠️ あなたの学生IDが登録されていません。「登録:学生ID」で一度登録してください。"
+def get_schedule_for_line(target_date):
+    """指定された日付の時間割をテキスト形式で返す"""
     
-    target_date = datetime.now() + timedelta(days=day_offset)
-    yobi_str = YOBI_MAP_REVERSE.get(target_date.weekday())
-    date_str_db = target_date.strftime("%Y/%m/%d")
-    date_str_display = target_date.strftime('%Y/%m/%d')
+    # 曜日コード (0=月, 1=火, ...)
+    yobi_code = target_date.weekday() 
+    yobi_str = YOBI_MAP_REVERSE.get(yobi_code)
     
-    if target_date.weekday() >= 5: # 土日
-        return f"🗓️ {date_str_display}({yobi_str})は週末のため、授業はありません。"
-
-    plan_row = 授業計画.query.get(date_str_db)
-    if not plan_row:
-        return f"🗓️ {date_str_display}({yobi_str})は授業計画にないため、休校日です。"
-
-    selected_kiki = str(plan_row.期) 
-    yobi_to_use = YOBI_MAP_REVERSE.get(plan_row.授業曜日)
-
-    daily_schedules_query = db.session.query(
-        時間割.時限, 授業.授業科目名, 授業.担当教員, 教室.教室名, 時間割.備考
+    # 授業計画から期と曜日コードを取得
+    date_str = target_date.strftime("%Y/%m/%d")
+    plan_row = 授業計画.query.get(date_str)
+    
+    if plan_row:
+        kiki = str(plan_row.期)
+        yobi_to_use = YOBI_MAP_REVERSE.get(plan_row.授業曜日) # 授業計画に指定された曜日コード
+    else:
+        kiki = get_current_kiki() # 授業計画がない場合は現在の期を使用
+        yobi_to_use = yobi_str
+    
+    # 時間割データの取得
+    schedule_rows = db.session.query(
+        時間割, 授業.授業科目名, 授業.担当教員
     ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
-     .outerjoin(教室, 授業.教室ID == 教室.教室ID)\
-     .filter(時間割.学期 == selected_kiki, 時間割.曜日 == yobi_to_use)\
+     .filter(時間割.学期 == kiki, 時間割.曜日 == yobi_to_use)\
      .order_by(時間割.時限).all()
+     
+    if not schedule_rows:
+        return f"{date_str} ({yobi_str}): 授業計画が見つからないか、休校日です。"
 
-    output_lines = [f"🗓️ {date_str_display} ({yobi_to_use}) - 第{selected_kiki}期"]
-    
-    for period, subject, teacher, room, remark in daily_schedules_query:
-        if (period < 5 and subject):
-            output_lines.append(f"\n【{period}限】 {subject}\n  (👤 {teacher or '未定'} / 📍 {room or '未定'})")
-        elif (period == 5 and remark):
-            output_lines.append(f"\n【5限】 💡 備考: {remark}")
+    output = [f"📅 {date_str} ({yobi_to_use}) - 第{kiki}期 の時間割"]
+    for row in schedule_rows:
+        time_row = TimeTable.query.get(row[0].時限) # TimeTableにアクセス
+        time_str = f"({time_row.開始時刻.strftime('%H:%M')}-{time_row.終了時刻.strftime('%H:%M')})" if time_row else ""
         
-    if len(output_lines) == 1:
-        output_lines.append("\n授業の予定はありません。")
+        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間")
+        teacher = row[2] if row[2] else ""
 
-    return "\n".join(output_lines)
+        output.append(f"  {row[0].時限}限 {time_str}\n  {subject_name} {teacher}")
+
+    return "\n".join(output)
 
 def get_attendance_summary_for_line(line_user_id):
-    """(テキスト版) 出席サマリーを返す"""
-    student_id = get_student_id_from_line_user(line_user_id)
+    """LINEユーザーIDに対応する学生の出席サマリーを返す"""
+    
+    student_id = get_student_id_from_line_user(line_user_id) # ⬅️ 紐付けテーブルから取得！
+    
     if student_id is None:
-        return "⚠️ あなたの学生IDが登録されていません。「登録:学生ID」で一度登録してください。"
+        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
     
+    # 紐づいた学生情報と出席レポートロジックの実行
     student = 学生.query.get(student_id)
+    # ... (レポート機能のロジックを流用し、student_idで出席記録を集計してテキストで返す)
     
-    # 簡略化：Webレポートのロジックを流用（第1期のみ）
-    selected_kiki = '1'
-    # ... (Webレポートのロジックで attendance_rate, tardy_count, absent_count を計算) ...
-    # (ここでは簡略化してダミーデータを返します)
-    attendance_rate = 85.0
-    tardy_count = 2
-    absent_count = 1
-    
-    return f"👤 {student.学生名}さんの出席状況 (第{selected_kiki}期)\n\n出席率: {attendance_rate}%\n遅刻: {tardy_count}回\n欠席: {absent_count}回\n\n詳細はWeb管理画面で確認してください。"
-
-def create_in_room_list_text(active_students):
-    """(テキスト版) 在室状況リストを返す"""
-    if not active_students:
-        return "現在、在室中の学生はいません。"
-        
-    output_lines = ["🏫 現在の在室状況"]
-    for student_name, room_name, status in active_students:
-        output_lines.append(f"・{student_name} (📍 {room_name} / {status})")
-    
-    return "\n".join(output_lines)
+    return f"【学生ID:{student_id} / {student.学生名}さん】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
 
 #最終退室
 def process_exit_record(line_user_id):
@@ -630,22 +602,26 @@ def process_return_from_exit(line_user_id):
     else:
         return "⚠️ 一時退出中の記録が見つかりません。"
 
+def 判定(時限, 登録時刻):
+    row = TimeTable.query.get(時限)
+    if not row: return "未定義"
+    
+    # row.開始時刻 は datetime.time オブジェクト
+    開始 = datetime.combine(登録時刻.date(), row.開始時刻)
+    経過 = (登録時刻 - 開始).total_seconds() / 60
+    
+    if 経過 <= 0: return "出席"
+    elif 経過 <= 20: return "遅刻"
+    else: return "欠席"
 
-# ----------------------------------------------------------------------
-# 4. 認証ルート (Login / Logout)
-# ----------------------------------------------------------------------
-# (変更なし)
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    # ... (既存のログインロジック) ...
-    pass
+def get_student_id_from_line_user(line_user_id):
+    """LINE User IDから学生IDを取得する"""
+    mapping = LineUser.query.filter_by(line_user_id=line_user_id).first()
+    return mapping.student_id if mapping else None
 
-@app.route("/logout")
-@login_required
-def logout():
-    # ... (既存のログアウトロジック) ...
-    pass
+sensor_data = [] # センサーデータ（ESP32）用
 
+# --- 6. 認証ルート (Login / Logout) ---
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """ログインページと認証処理"""
@@ -1519,44 +1495,6 @@ def my_attendance_detail():
                            selected_kiki=selected_kiki, kikis=["1", "2", "3", "4"],
                            subject_filter=subject_name_filter)
 
-@app.route('/api/check_command', methods=['GET'])
-def check_command():
-    """RasPiからのポーリングを受け付け、未処理のコマンドを返す"""
-    
-    # 未処理のコマンドを一つだけ取得 (FIFO: 先入れ先出し)
-    command_record = CommandQueue.query.filter_by(status='PENDING').order_by(CommandQueue.created_at.asc()).first()
-
-    if command_record:
-        # コマンドを返す前にステータスを更新し、二重送信を防ぐ
-        command_record.status = 'SENT'
-        db.session.commit()
-        
-        return jsonify({
-            'command': command_record.command_type,
-            'id': command_record.id,
-            'status': 'READY'
-        }), 200
-    else:
-        return jsonify({'status': 'NO_COMMAND'}), 200
-
-@app.route('/api/set_command', methods=['POST'])
-def set_command():
-    """Web UIからコマンドを受け取り、DBに保存する"""
-    command_type = request.form.get('command_type') or request.get_json().get('command_type')
-
-    if not command_type:
-        return jsonify({'success': False, 'message': 'Command type missing'}), 400
-    
-    try:
-        new_command = CommandQueue(command_type=command_type)
-        db.session.add(new_command)
-        db.session.commit()
-        return jsonify({'success': True, 'message': f'Command {command_type} queued'}), 201
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Command queue error: {e}")
-        return jsonify({'success': False, 'message': f'Server error: {e}'}), 500
-
 @app.route("/report_summary", methods=["GET"])
 @login_required
 def report_summary():
@@ -1805,9 +1743,8 @@ def resolve_alert(record_id):
         db.session.commit()
         flash("✅ 連絡を確認済みにしました。", "success")
     return redirect(url_for('alerts'))
-# ----------------------------------------------------------------------
-# 9. LINE Bot Webhook (テキスト応答版)
-# ----------------------------------------------------------------------
+
+# --- 11. LINE Bot Webhook (SQLAlchemy版) ---
 
 if handler:
     @app.route("/callback", methods=['POST'])
@@ -1820,105 +1757,142 @@ if handler:
             handler.handle(body, signature)
         except InvalidSignatureError:
             print("Invalid signature. Please check your channel secret.")
-            abort(400)
+            abort(400) # ⬅️ abort を import する必要があります
         return 'OK'
 
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
-        """LINEのテキストメッセージを処理する (テキスト応答のみ)"""
+        """LINEのテキストメッセージを処理する"""
         received_text = event.message.text
         user_id = event.source.user_id
+        reply_message = ""
         now = datetime.now()
-        
-        # 応答用変数を初期化
-        reply_message = "" 
 
-        try:
-            # --- 1. 登録・連絡 (早期リターン) ---
-            if received_text.startswith("登録:"):
-                # (既存の登録ロジック)
-                # ...
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_message))
-            
-            if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
-                # (既存の欠席連絡ロジック)
-                # ... (メール送信ロジックも含む) ...
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_message))
-
-            # --- 2. コマンド処理 (テキストを生成) ---
-            
-            if received_text == "今日の時間割":
-                reply_message = get_daily_schedule_for_line(user_id, day_offset=0) 
-                
-            elif received_text == "明日の時間割":
-                reply_message = get_daily_schedule_for_line(user_id, day_offset=1)
-                
-            elif received_text in ["在室状況", "今誰がいる？"]:
-                active_sessions = db.session.query(
-                    学生.学生名, 教室.教室名, 在室履歴.備考
-                ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
-                 .join(学生, 在室履歴.学生ID == 学生.学生ID)\
-                 .filter(在室履歴.退室時刻 == None).all()
-                
-                active_students_list = []
-                for student_name, room_name, 備考 in active_sessions:
-                    status = "一時退出中" if 備考 == TEMP_EXIT_STATUS else "在室"
-                    active_students_list.append((student_name, room_name or '教室不明', status))
-                    
-                reply_message = create_in_room_list_text(active_students_list)
-                
-            elif received_text == "出席サマリー":
-                reply_message = get_attendance_summary_for_line(user_id) 
-
-            elif received_text == "一時退出":
-                reply_message = process_temporary_exit(user_id) 
-            elif received_text == "戻りました":
-                reply_message = process_return_from_exit(user_id)
-            elif received_text == "最終退室":
-                reply_message = process_exit_record(user_id)
-            elif received_text == "退室":
-                reply_message = process_exit_record(user_id)
-            elif received_text == "気温":
-                reply_message = "センサーデータがありません。" # (sensor_data ロジック)
-            else:
-                reply_message = f"「{received_text}」を受け取りました。"
-
-            # --- 3. 応答 (クイックリプライを付与) ---
-            
-            if reply_message: # reply_message が空でないことを確認
-                quick_reply_buttons = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
-                    QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
-                    QuickReplyButton(action=MessageAction(label="在室状況", text="在室状況")),
-                    QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
-                    QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
-                    QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
-                ])
-                
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
-                )
-            else:
-                print(f"INFO: 応答メッセージが生成されませんでした。 (受信: {received_text})")
-
-        except Exception as e:
-            print(f"ERROR in handle_message: {e}")
+        # --- 1. アカウント登録処理 ---
+        if received_text.startswith("登録:"):
             try:
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=f"エラーが発生しました: {e}")
-                )
-            except Exception as reply_e:
-                 print(f"ERROR: 返信の送信にも失敗しました: {reply_e}")
+                input_student_id = int(received_text.split(":")[1].strip())
+            except (IndexError, ValueError):
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 登録形式が正しくありません。「登録:学生ID」の形式で入力してください。"))
 
-# ----------------------------------------------------------------------
-# 10. 実行
-# ----------------------------------------------------------------------
+            student = 学生.query.get(input_student_id)
+            if not student:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。"))
+            
+            # 既存の紐付けをチェック
+            existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
+            if existing_mapping:
+                existing_mapping.student_id = input_student_id
+                db.session.commit()
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 登録情報を更新しました。\nあなたのID ({input_student_id}) が紐づきました。"))
+
+            # 新しい紐付けを登録
+            new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
+            db.session.add(new_mapping)
+            db.session.commit()
+            return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
+        
+        # --- 2. 遅刻/欠席の連絡処理 ---
+        if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
+    
+            # ユーザーの学生IDを取得
+            student_id = get_student_id_from_line_user(user_id)
+            if student_id is None:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。"))
+
+            report_type = "欠席" if received_text.startswith("欠席連絡:") else "遅刻"
+            try:
+                reason = received_text.split(":", 1)[1].strip()
+                if not reason: raise IndexError
+            except IndexError:
+                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {report_type}連絡の理由を必ず記述してください。\n例: 「{report_type}連絡:腹痛のため」"))
+            
+            # データベースに記録
+            new_report = ReportRecord(
+                student_id=student_id,
+                report_type=report_type,
+                reason=reason,
+                report_date=datetime.now(),
+                is_resolved=False
+            )
+            db.session.add(new_report)
+            db.session.commit()
+            
+            student = 学生.query.get(student_id)
+            return line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知します。"
+            ))
+
+        if received_text == "今日の時間割" or received_text == "明日の時間割":
+            days_ahead = 0 if received_text == "今日の時間割" else 1
+            target_date = now + timedelta(days=days_ahead)
+            
+            # 🚨 休日判定を追加
+            # Pythonの weekday(): 0=月, 5=土, 6=日
+            if target_date.weekday() >= 5: # 土曜日（5）または日曜日（6）の場合
+                if days_ahead == 0:
+                    reply_message = f"📅 本日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
+                else:
+                    reply_message = f"📅 明日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
+            else:
+                # 授業日であれば、既存の関数を呼び出す
+                reply_message = get_schedule_for_line(target_date)
+            
+        elif received_text == "出席サマリー":
+            # 出席サマリー機能（ここではシンプルに実装）
+            reply_message = get_attendance_summary_for_line(user_id) # ⚠️ 新しいヘルパー関数を定義します
+            
+        elif received_text == "退室":
+            # 在室履歴を終了させるロジック
+            reply_message = process_exit_record(user_id) # ⚠️ 新しいヘルパー関数を定義します
+        
+        elif received_text == "気温":
+            if sensor_data:
+                 latest = sensor_data[-1]
+                 reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+            else:
+                 reply_message = "センサーデータがまだありません。"
+            # 🚨 一時退出
+        elif received_text == "一時退出":
+            # process_temporary_exit は学生IDを紐付けテーブルから取得して処理を実行
+            reply_message = process_temporary_exit(user_id) 
+            
+        # 🚨 復帰
+        elif received_text == "戻りました":
+            reply_message = process_return_from_exit(user_id)
+            
+        # 🚨 最終退室
+        elif received_text == "最終退室":
+            # process_exit_record は退室時刻を記録してセッションを終了
+            reply_message = process_exit_record(user_id)
+            
+        # 🚨 以前の "退室" コマンドも一応残しておく（クイックリプライでは「最終退室」を使う）
+        elif received_text == "退室":
+            reply_message = process_exit_record(user_id)         
+        else:
+            reply_message = f"「{received_text}」を受け取りました。"
+
+        quick_reply_buttons = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
+            QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
+            QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
+            
+            # 👇 新しく追加する一時退出のボタン
+            QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
+            QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
+            
+            # 👇 最終退室のボタン（既存の「退室」ボタンを明確化）
+            QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
+        ])
+
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
+        )
+
+# --- 12. 実行 ---
 
 if __name__ == "__main__":
     with app.app_context():
-        # ローカル実行時に db.create_all() を呼び出す（任意）
-        # db.create_all()
         pass
     app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
