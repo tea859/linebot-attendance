@@ -267,11 +267,13 @@ class ReportRecord(db.Model):
     
     student = relationship("学生") # 学生情報を参照
 
-class face_auth(db.Model):
-    __tablename__ = 'face_auth'
-    face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
-    student = relationship("学生", back_populates="face_auth")
+class FaceData(db.Model):
+    __tablename__ = 'face_data'
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), primary_key=True)
+    face_encoding = db.Column(db.Text, nullable=False) 
+    
+    # 🚨 修正箇所: backref="face_data" を back_populates="face_data" に変更
+    student = relationship("学生", back_populates="face_data")
 
 # ----------------------------------------------------------------------
 # 5. データベースに挿入
