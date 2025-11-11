@@ -23,8 +23,8 @@ from linebot.exceptions import (
 )
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction,
-    FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, SeparatorComponent, SpacerComponent,
-    ImageComponent,
+    FlexSendMessage, BubbleContainer, BoxComponent, TextComponent, SeparatorComponent, 
+    Spacer, ImageComponent,
 )
 from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
