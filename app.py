@@ -567,6 +567,181 @@ YOBI_MAP = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0
 ROMAN_TO_INT = {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4}
 YOBI_MAP_REVERSE = {v: k for k, v in YOBI_MAP.items()}
 
+def get_period_time(period_num):
+    """時限番号に対応する時刻文字列を取得する"""
+    try:
+        period_obj = TimeTable.query.get(period_num)
+        if period_obj:
+            return f"{period_obj.開始時刻.strftime('%H:%M')} - {period_obj.終了時刻.strftime('%H:%M')}"
+    except Exception as e:
+        print(f"TimeTable取得エラー: {e}")
+        
+    # フォールバック（TimeTableにデータがない場合）
+    time_map = { 1: "08:50-10:30", 2: "10:35-12:15", 3: "13:00-14:40", 4: "14:45-16:25", 5: "16:40-18:20" }
+    return time_map.get(period_num, "時間不明")
+    
+def create_timetable_flex_message(date_str, yobi_str, kiki, schedule_data):
+    """
+    時間割データを元にFlex MessageのBubbleコンポーネントを作成し、FlexSendMessageを返す
+    schedule_data は {period: (授業科目名, 担当教員, 教室名, 備考), ...} の辞書を想定
+    """
+    
+    class_contents = [] # bodyコンポーネントのリスト
+
+    # 1限から5限までループして、各時限のコンポーネントを作成
+    for period in range(1, 6):
+        slot = schedule_data.get(period) # 該当時限のデータを取得
+
+        # 授業情報が存在しない (空きコマ)
+        if not slot:
+            class_contents.append({
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"【{period}限】", "color": "#AAAAAA", "flex": 2, "size": "sm"},
+                    {"type": "text", "text": "空きコマ / 休憩", "color": "#AAAAAA", "flex": 5, "size": "sm"}
+                ],
+                "paddingBottom": "sm"
+            })
+        
+        # 授業情報が存在する
+        else:
+            subject_name, teacher_name, room_name, remark = slot
+            
+            # 5限目（備考欄）の特別な扱い
+            if period == 5:
+                content_text = f"💡 備考: {remark}" if remark else "💡 備考: 特になし"
+                color = "#D97706" if remark else "#374151" # オレンジ系 or グレー
+            # 通常授業
+            else:
+                content_text = f"{subject_name}"
+                color = "#1F2937" # 濃いグレー
+                
+            # 授業情報Box
+            class_contents.append({
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": f"【{period}限】 {get_period_time(period)}", "color": "#1D4ED8", "size": "sm", "weight": "bold"}, # 濃い青
+                    {"type": "text", "text": content_text, "wrap": True, "weight": "bold", "size": "lg", "color": color, "margin": "xs"},
+                ],
+                "spacing": "xs",
+                "paddingBottom": "md"
+            })
+            
+            # 1-4限で、教員名や教室名があれば追加
+            if period < 5:
+                details = []
+                if teacher_name:
+                    details.append({"type": "text", "text": f"👤 {teacher_name}", "size": "sm", "color": "#555555"})
+                if room_name:
+                    details.append({"type": "text", "text": f"📍 {room_name}", "size": "sm", "color": "#555555"})
+                
+                if details:
+                    class_contents.append({
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": details,
+                        "margin": "sm",
+                        "paddingBottom": "md"
+                    })
+
+        # 各授業の間に区切り線を入れる（最後は除く）
+        if period < 5:
+            class_contents.append({"type": "separator", "margin": "sm"})
+
+
+    # Bubble構造の定義
+    flex_content = {
+      "type": "bubble",
+      "size": "giga", 
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {"type": "text", "text": f"🗓️ {date_str} ({yobi_str})", "weight": "bold", "color": "#FFFFFF", "size": "lg", "align": "center"},
+          {"type": "text", "text": f"第{kiki}期 時間割", "color": "#DDDDDD", "size": "sm", "align": "center"}
+        ],
+        "paddingAll": "15px",
+        "backgroundColor": "#3B82F6", # 青
+        "height": "75px"
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": class_contents,
+        "paddingAll": "20px"
+      }
+    }
+    
+    return FlexSendMessage(alt_text=f"{date_str}の時間割", contents=flex_content)
+    
+def get_daily_schedule_for_line(line_user_id, day_offset=0):
+    """
+    指定された日（day_offset=0は今日、1は明日）の時間割データを取得し、Flex Messageを返す
+    """
+    
+    # --- 1. ユーザーIDの確認 ---
+    student_id = get_student_id_from_line_user(line_user_id) 
+    if student_id is None:
+        return TextSendMessage(text="⚠️ あなたの学生IDが登録されていません。「登録:学生ID」で一度登録してください。")
+
+    # --- 2. 日付と曜日の特定 ---
+    target_date = datetime.now() + timedelta(days=day_offset)
+    yobi_map = {0: '月', 1: '火', 2: '水', 3: '木', 4: '金', 5: '土', 6: '日'}
+    yobi_str = yobi_map.get(target_date.weekday())
+    date_str_db = target_date.strftime("%Y/%m/%d") # 授業計画テーブル検索用
+    date_str_display = target_date.strftime('%Y/%m/%d') # 表示用
+    
+    # 土日は時間割がないと仮定
+    if target_date.weekday() >= 5: # 土曜日(5)または日曜日(6)
+        return TextSendMessage(text=f"🗓️ {date_str_display}({yobi_str})は週末のため、授業はありません。")
+
+    # --- 3. 授業計画テーブルから「期」と「実働曜日」を取得 ---
+    plan_row = 授業計画.query.get(date_str_db)
+    
+    if plan_row:
+        selected_kiki = str(plan_row.期) 
+        yobi_to_use = yobi_map.get(plan_row.授業曜日) # 授業計画に指定された曜日コード (例: 1)
+    else:
+        # 授業計画にない日 (休日など)
+        return TextSendMessage(text=f"🗓️ {date_str_display}({yobi_str})は授業計画にないため、休校日です。")
+
+    # 授業計画で指定された曜日 (例: '月')
+    yobi_str_to_use = yobi_map.get(plan_row.授業曜日)
+    if not yobi_str_to_use:
+         return TextSendMessage(text=f"🗓️ {date_str_display}は授業計画で曜日が不明です。")
+
+    # --- 4. 時間割データをDBから取得 ---
+    daily_schedules_query = db.session.query(
+        時間割.時限, 授業.授業科目名, 授業.担当教員, 教室.教室名, 時間割.備考
+    ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
+     .outerjoin(教室, 授業.教室ID == 教室.教室ID)\
+     .filter(時間割.学期 == selected_kiki, 時間割.曜日 == yobi_str_to_use)\
+     .order_by(時間割.時限).all()
+
+    
+    # --- 5. 辞書形式に整形 ---
+    schedule_data = {}
+    for period, subject, teacher, room, remark in daily_schedules_query:
+        
+        # 授業が存在する場合（授業IDが0でない、または5限で備考がある）
+        if (period < 5 and subject) or (period == 5 and remark):
+            schedule_data[period] = (
+                subject,
+                teacher or '未定',
+                room or '未定',
+                remark
+            )
+
+    # --- 6. Flex Message を生成 ---
+    return create_timetable_flex_message(
+        date_str_display, 
+        yobi_str_to_use, # 授業計画に基づいた曜日
+        selected_kiki,
+        schedule_data
+    )
+
 def get_current_kiki():
     now = datetime.now()
     today_str = f"{now.year}/{now.month}/{now.day}"
@@ -2040,20 +2215,11 @@ if handler:
                 text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知します。"
             ))
 
-        if received_text == "今日の時間割" or received_text == "明日の時間割":
-            days_ahead = 0 if received_text == "今日の時間割" else 1
-            target_date = now + timedelta(days=days_ahead)
-            
-            # 🚨 休日判定を追加
-            # Pythonの weekday(): 0=月, 5=土, 6=日
-            if target_date.weekday() >= 5: # 土曜日（5）または日曜日（6）の場合
-                if days_ahead == 0:
-                    reply_message = f"📅 本日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
-                else:
-                    reply_message = f"📅 明日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
-            else:
-                # 授業日であれば、既存の関数を呼び出す
-                reply_message = get_schedule_for_line(target_date)
+        elif received_text == "今日の時間割":
+            response_message = get_daily_schedule_for_line(user_id, day_offset=0) 
+        
+        elif received_text == "明日の時間割":
+            response_message = get_daily_schedule_for_line(user_id, day_offset=1)
             
         elif received_text == "出席サマリー":
             # 出席サマリー機能（ここではシンプルに実装）
