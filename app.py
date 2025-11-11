@@ -567,11 +567,68 @@ def create_in_room_list_text(active_students):
     
     return "\n".join(output_lines)
 
-# (一時退出、最終退室のヘルパー関数は変更なし)
-# def process_exit_record(line_user_id): ...
-# def process_temporary_exit(line_user_id): ...
-# def process_return_from_exit(line_user_id): ...
-# (※ これらの関数は app.py の他の場所に定義されている必要があります)
+#最終退室
+def process_exit_record(line_user_id):
+    """学生の在室履歴を終了させる（最終退室）"""
+    # 🚨 修正箇所: 紐付けテーブルから学生IDを取得
+    student_id = get_student_id_from_line_user(line_user_id) 
+    if student_id is None:
+        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
+
+    # --- 既存のロジック ---
+    existing_session = 在室履歴.query.filter_by(学生ID=student_id, 退室時刻=None).first()
+    
+    if existing_session:
+        existing_session.退室時刻 = datetime.now()
+        db.session.commit()
+        # データベースから学生名を取得（エラー処理のため）
+        student = 学生.query.get(student_id) 
+        return f"🚪 {student.学生名}さんの最終退室時刻を記録しました。またのご利用をお待ちしております！"
+    else:
+        return "⚠️ 現在、入室記録が見つかりませんでした。"
+
+#一時退出
+def process_temporary_exit(line_user_id):
+    """学生の一時退出を記録する"""
+    # 🚨 修正箇所: 紐付けテーブルから学生IDを取得
+    student_id = get_student_id_from_line_user(line_user_id) 
+    if student_id is None:
+        return "⚠️ 学生IDが登録されていません。「登録:学生ID」で登録してください。"
+
+    # ... (既存のロジックを維持) ...
+    existing_session = 在室履歴.query.filter_by(学生ID=student_id, 退室時刻=None).first()
+    
+    if existing_session and existing_session.備考 == TEMP_EXIT_STATUS:
+        return "⚠️ すでに一時退出中です。戻られたら「戻りました」をタップしてください。"
+    
+    if existing_session:
+        # 既存の在室記録の備考欄に一時退出ステータスを記録
+        existing_session.備考 = TEMP_EXIT_STATUS
+        db.session.commit()
+        return "🚶 一時退出を記録しました。戻られましたら「戻りました」をタップしてください。"
+    else:
+        return "⚠️ 入室記録が見つかりません。カメラでの入室認証が必要です。"
+
+#退出状態から戻る
+def process_return_from_exit(line_user_id):
+    """一時退出状態からの復帰を記録する"""
+    # 🚨 修正箇所: 紐付けテーブルから学生IDを取得
+    student_id = get_student_id_from_line_user(line_user_id) 
+    if student_id is None:
+        return "⚠️ 学生IDが登録されていません。「登録:学生ID」で登録してください。"
+
+    # ... (既存のロジックを維持) ...
+    existing_session = 在室履歴.query.filter_by(
+        学生ID=student_id, 退室時刻=None, 備考=TEMP_EXIT_STATUS
+    ).first()
+    
+    if existing_session:
+        # 備考欄をリセットし、復帰を記録
+        existing_session.備考 = None
+        db.session.commit()
+        return "🎉 おかえりなさい！在室記録を再開します。"
+    else:
+        return "⚠️ 一時退出中の記録が見つかりません。"
 
 
 # ----------------------------------------------------------------------
