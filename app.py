@@ -221,6 +221,11 @@ class ReportRecord(db.Model):
     
     student = relationship("学生") # 学生情報を参照
 
+class face_auth(db.Model):
+    __tablename__ = 'face_auth'
+    face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
+
 @app.cli.command('init-db')
 def init_db_command():
     
@@ -663,7 +668,15 @@ def index():
     messages = get_flashed_messages(with_categories=True)
     if messages:
         category, message = messages[0]
-            
+
+    unresolved_alerts_count = 0
+    if current_user.is_authenticated: # ログインしているユーザーのみ件数を取得
+        try:
+            unresolved_alerts_count = db.session.query(ReportRecord.record_id).filter(ReportRecord.is_resolved == False).count()
+        except Exception as e:
+            print(f"アラート件数のカウントに失敗: {e}")
+            # エラーが発生してもページは表示させる
+            unresolved_alerts_count = 0        
     links = [
         {"url": "/attendance?kiki=1", "name": "出席登録 / 全体記録"},
         {"url": "/schedule", "name": "時間割表示"},
@@ -677,7 +690,8 @@ def index():
                            links=links, 
                            students=[(s.学生ID, s.学生名) for s in students], # テンプレートが (id, name) を期待
                            message=message,
-                           category=category)
+                           category=category
+                           unresolved_alerts_count=unresolved_alerts_count)
 
 # --- 8. APIルート (SQLAlchemy版) ---
 @app.route('/api/schedule_update', methods=['POST'])
@@ -767,8 +781,7 @@ def api_schedule_update():
         print(f"Schedule update failed: {e}")
         return jsonify({'success': False, 'error': f'An internal error occurred: {str(e)}'}), 500
     
-@app.route("/api/register_attendance", methods=["POST"])
-@login_required 
+@app.route("/api/register_attendance", methods=["POST"]) 
 def api_register_attendance():
     """(顔認証API) 出席信号を受け取りDBに登録 (ORM版)"""
     try:
