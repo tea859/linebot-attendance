@@ -690,7 +690,7 @@ def index():
                            links=links, 
                            students=[(s.学生ID, s.学生名) for s in students], # テンプレートが (id, name) を期待
                            message=message,
-                           category=category
+                           category=category,
                            unresolved_alerts_count=unresolved_alerts_count)
 
 # --- 8. APIルート (SQLAlchemy版) ---
