@@ -133,6 +133,20 @@ class 教室(db.Model):
     教室名 = db.Column(db.String, nullable=False)
     授業s = db.relationship('授業', back_populates='教室')
 
+class LineUser(db.Model):
+    __tablename__ = 'line_user'
+    line_user_id = db.Column(db.String(50), primary_key=True) 
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), unique=True, nullable=False)
+    student = relationship("学生", back_populates="line_user")
+    def __repr__(self):
+        return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
+    
+class FaceData(db.Model):
+    __tablename__ = 'face_data'
+    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), primary_key=True)
+    face_encoding = db.Column(db.Text, nullable=False) 
+    student = relationship("学生", back_populates="face_data")    
+
 class 学生(UserMixin, db.Model):
     __tablename__ = '学生'
     学生ID = db.Column(db.Integer, primary_key=True)
@@ -241,21 +255,6 @@ class 時間割_デフォルト(db.Model):
     備考 = db.Column(db.String)
     __table_args__ = (UniqueConstraint('学期', '曜日', '時限', name='_default_gaku_yobi_jigen_uc'),)
 
-class LineUser(db.Model):
-    __tablename__ = 'line_user'
-    
-    # LINEのユーザーIDは非常に長い文字列（約33文字）
-    line_user_id = db.Column(db.String(50), primary_key=True) 
-    
-    # 学生テーブルと紐づける
-    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), unique=True, nullable=False)
-    
-    # リレーションシップの定義（学生IDから学生情報を参照できるようにする）
-    student = relationship("学生", back_populates="line_user")
-
-    def __repr__(self):
-        return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
-
 class ReportRecord(db.Model):
     __tablename__ = 'report_record'
     record_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -267,13 +266,7 @@ class ReportRecord(db.Model):
     
     student = relationship("学生") # 学生情報を参照
 
-class FaceData(db.Model):
-    __tablename__ = 'face_data'
-    student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID', ondelete='CASCADE'), primary_key=True)
-    face_encoding = db.Column(db.Text, nullable=False) 
-    
-    # 🚨 修正箇所: backref="face_data" を back_populates="face_data" に変更
-    student = relationship("学生", back_populates="face_data")
+
 
 # ----------------------------------------------------------------------
 # 5. データベースに挿入
