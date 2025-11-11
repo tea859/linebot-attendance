@@ -280,9 +280,22 @@ def init_db_command():
     from sqlalchemy.exc import IntegrityError
     
     with app.app_context():
-            
-        # 2. すべてのテーブルを作成/再作成（在室履歴には「備考」が追加される）
-        db.drop_all()
+        
+        print("【INFO】既存のスキーマ(public)を CASCADE で強制的に削除します...")
+        try:
+            # ⬅️ 以前の 'db.drop_all()' の代わりに、より強力なRAW SQLを実行
+            # これで 'face_auth' のような幽霊テーブルも強制削除される
+            db.session.execute(text('DROP SCHEMA public CASCADE;'))
+            db.session.execute(text('CREATE SCHEMA public;'))
+            db.session.commit()
+            print("【INFO】スキーマの再作成が完了しました。")
+        except Exception as e:
+            # (初回デプロイ時など、スキーマが存在しない場合はエラーになるが問題ない)
+            print(f"【WARNING】スキーマの削除に失敗しました (初回デプロイの場合は無視してOK): {e}")
+            db.session.rollback() # 失敗した場合はロールバック
+
+        # 2. すべてのテーブルを（まっさらなスキーマに）作成
+        # これで password_hash や face_data を持つ新しいテーブルが正しく作られる
         db.create_all()
         print("データベース初期化完了。")
         
