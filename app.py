@@ -1778,7 +1778,7 @@ if handler:
         now = datetime.now()
 
         # --- 1. アカウント登録処理 ---
-        if received_text.startswith("登録:"):
+        if received_text.startswith("登録"):
             try:
                 input_student_id = int(received_text.split(":")[1].strip())
             except (IndexError, ValueError):
@@ -1802,14 +1802,14 @@ if handler:
             return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
         
         # --- 2. 遅刻/欠席の連絡処理 ---
-        if received_text.startswith("欠席連絡:") or received_text.startswith("遅刻連絡:"):
+        if received_text.startswith("欠席連絡") or received_text.startswith("遅刻連絡:"):
     
             # ユーザーの学生IDを取得
             student_id = get_student_id_from_line_user(user_id)
             if student_id is None:
                 return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。"))
 
-            report_type = "欠席" if received_text.startswith("欠席連絡:") else "遅刻"
+            report_type = "欠席" if received_text.startswith("欠席連絡") else "遅刻"
             try:
                 reason = received_text.split(":", 1)[1].strip()
                 if not reason: raise IndexError
