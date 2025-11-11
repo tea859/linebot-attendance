@@ -251,7 +251,7 @@ class LineUser(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), unique=True, nullable=False)
     
     # リレーションシップの定義（学生IDから学生情報を参照できるようにする）
-    student = relationship("学生", backref="line_user", uselist=False)
+    student = relationship("学生", back_populates="line_user")
 
     def __repr__(self):
         return f"<LineUser line_user_id='{self.line_user_id}' student_id={self.student_id}>"
@@ -271,7 +271,7 @@ class face_auth(db.Model):
     __tablename__ = 'face_auth'
     face_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
-    student = relationship("学生", backref="line_user", uselist=False)
+    student = relationship("学生", back_populates="face_auth")
 
 # ----------------------------------------------------------------------
 # 5. データベースに挿入
