@@ -38,7 +38,98 @@
                     <p class="text-center text-gray-500 py-8">現在、表示できる出席データがありません。</p>
                 {% endif %}
             </div>
+            <hr style="margin-top: 2em; margin-bottom: 2em;">
 
+            <h2>現在の時間割 (第{{ selected_kiki }}期)</h2>
+            
+            <style>
+                /* 時間割テーブル用の簡易スタイル */
+                .schedule-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 2em;
+                    table-layout: fixed; /* カラム幅を均等に */
+                }
+                .schedule-table th, .schedule-table td {
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                    text-align: left;
+                    vertical-align: top;
+                    height: 120px; /* セルの高さを固定 */
+                    font-size: 0.9em;
+                }
+                .schedule-table th {
+                    background-color: #f4f4f4;
+                    text-align: center;
+                    width: 15%; /* 曜日の列幅 */
+                }
+                .schedule-table td.period-header {
+                    background-color: #f9f9f9;
+                    font-weight: bold;
+                    text-align: center;
+                    width: 8%; /* 時限の列幅 */
+                    vertical-align: middle;
+                }
+                /* 今日の曜日をハイライト */
+                .schedule-table th.today, .schedule-table td.today {
+                    background-color: #fffbe6; /* 薄い黄色 */
+                }
+                .schedule-table .subject {
+                    font-weight: bold;
+                    color: #005a9c;
+                    display: block;
+                    margin-bottom: 5px;
+                }
+                .schedule-table .details {
+                    font-size: 0.9em;
+                    color: #555;
+                }
+                .schedule-table .empty {
+                    color: #aaa;
+                    text-align: center;
+                    vertical-align: middle;
+                    font-size: 0.9em;
+                }
+            </style>
+            
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th style="width: 8%;">時限</th>
+                        {% for yobi in 曜日順 %}
+                        <th {% if yobi == today_yobi %}class="today"{% endif %}>
+                            {{ yobi }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for jigen in 時限一覧 %}
+                    <tr>
+                        <td class="period-header">{{ jigen }}限</td>
+                        
+                        {% for yobi in 曜日順 %}
+                        <td {% if yobi == today_yobi %}class="today"{% endif %}>
+                            
+                            {% set cell = schedule_grid[jigen][yobi] %}
+                            
+                            {% if cell.is_empty %}
+                                <div class="empty">{{ cell.display_text }}</div>
+                            {% else %}
+                                <span class="subject">{{ cell.display_text }}</span>
+                                <div class="details">
+                                    {% if cell.subject_id != 0 %}
+                                        <div>{{ cell.teacher }}</div>
+                                        <div>{{ cell.room }}</div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             </main>
     </div>
 </body>
