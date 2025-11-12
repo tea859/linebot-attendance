@@ -2074,19 +2074,66 @@ def my_portal():
     student_id = current_user.学生ID
     student_name = current_user.学生名
     
-    # 自分の出席サマリーデータを取得
-    # (my_attendanceルートのロジックを流用)
-    selected_kiki = get_current_kiki() # 現在の期を取得
+    # ------------------------------------------------------------------
+    # ▼▼▼ 時間割・サマリーデータ取得ロジック ▼▼▼
+    # ------------------------------------------------------------------
+
+    # --- 1. 学期情報を取得 ---
+    selected_kiki = get_current_kiki()
     
-    # (my_attendanceのロジックをここに簡略化して挿入)
-    # (※ 実際には /my_attendance のロジックを呼び出すか、再実装します)
-    # (※ ここでは仮のデータを渡します)
-    report_data = [] # 実際にはここで /my_attendance と同じDBクエリを実行
+    # (my_attendanceルートのロジックを流用。今はダミーのまま)
+    report_data = [] 
     
+    # --- 2. 時間割データを取得 ---
+    # 授業と教室をJOINして取得
+    schedules_rows = db.session.query(
+        時間割.時間割ID, 時間割.曜日, 時間割.時限, 時間割.学期, 
+        授業.授業科目名, 授業.担当教員, 教室.教室名, 
+        時間割.備考, 時間割.授業ID
+    ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
+     .outerjoin(教室, 授業.教室ID == 教室.教室ID)\
+     .filter(時間割.学期 == selected_kiki)\
+     .order_by(時間割.時限, 時間割.曜日).all()
+
+    順序 = ["月", "火", "水", "木", "金"] # テンプレートで使う曜日のリスト
+    時限一覧 = list(range(1, 6))
+    schedule_grid = OrderedDict()
+    
+    # 曜日のヘッダー表示のために、まず空のグリッドを作成
+    for j in 時限一覧:
+        schedule_grid[j] = {y: {"is_empty": True, "remark": None, "teacher": None, "room": None, "display_text": "休憩/空欄"} for y in 順序}
+        
+    for row in schedules_rows:
+        時間割ID, 曜日, 時限, 学期, 授業科目名, 担当教員, 教室名, 備考, 授業ID = row 
+        if 時限 in 時限一覧 and 曜日 in 順序:
+            教員名 = 担当教員 if 担当教員 else '教員不明'
+            表示用教室名 = 教室名 if 教室名 else '教室不明'
+            display_name = 備考 if 時限 == 5 else (授業科目名 if 授業科目名 else "授業名不明")
+            # 5限で備考がない、または5限以外で授業IDがない場合は空欄扱い
+            is_empty = (not 授業ID and not 備考) if (時限 < 5 or (時限 == 5 and not 備考)) else (時限 == 5 and not 備考)
+            
+            schedule_grid[時限][曜日] = {
+                "id": 時間割ID, "subject": 授業科目名, "teacher": 教員名,
+                "room": 表示用教室名, "display_text": display_name,
+                "subject_id": 授業ID if 授業ID else 0,
+                "remark": 備考, "is_empty": is_empty
+            }
+
+    today_yobi = YOBI_MAP_REVERSE.get(datetime.now().weekday())
+
+    # ------------------------------------------------------------------
+    # ▲▲▲ データ取得ロジックここまで ▲▲▲
+    # ------------------------------------------------------------------
+
     return render_template("my_portal.html", 
                            student_name=student_name,
                            report_data=report_data, 
-                           selected_kiki=selected_kiki)
+                           selected_kiki=selected_kiki,
+                           schedule_grid=schedule_grid,
+                           曜日順=順序,
+                           時限一覧=時限一覧,
+                           today_yobi=today_yobi
+                           )
 
 
 @app.route("/student_logout")
