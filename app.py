@@ -725,6 +725,7 @@ def logout():
 
 # --- 7. メインページ (ダッシュボード) ---
 @app.route("/")
+@login_required
 def index():
     students = 学生.query.order_by(学生.学生ID).all()
     
