@@ -2119,7 +2119,9 @@ def my_portal():
                 "remark": 備考, "is_empty": is_empty
             }
 
-    today_yobi = YOBI_MAP_REVERSE.get(datetime.now().weekday())
+    python_weekday = datetime.now().weekday()
+    db_weekday = (python_weekday + 1) % 7 # ⬅️ (例: 水=2 -> (2+1)%7 = 3)
+    today_yobi = YOBI_MAP_REVERSE.get(db_weekday) # ⬅️ (例: 3 -> '水')
 
     # ------------------------------------------------------------------
     # ▲▲▲ データ取得ロジックここまで ▲▲▲
