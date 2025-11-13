@@ -99,8 +99,8 @@ class User(UserMixin):
         self.username = username
         self.password = password # 🚨 注意: 管理者パスワードはハッシュ化されていません
         
-    # 🚨 _idメソッドを追加
-    def _id(self):
+    # 🚨 get_idメソッドを追加
+    def get_id(self):
         # ユーザーIDとして「admin-」というプレフィックスを付けて返す
         return f"admin-{self.id}"
 
@@ -168,7 +168,7 @@ class 学生(UserMixin, db.Model):
     face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
 
     # 🚨 Flask-Loginのためのメソッドを追加
-    def _id(self):
+    def get_id(self):
         # ユーザーIDとして「student-」というプレフィックスを付けて返す
         return f"student-{self.学生ID}"
 
