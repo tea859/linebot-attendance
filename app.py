@@ -598,37 +598,52 @@ def get_schedule_for_line(target_date):
     body_contents.append(SeparatorComponent(margin="lg"))
 
     # 2. 各時間割
-    for row in schedule_rows:
-        time_row = TimeTable.query.get(row[0].時限) #
+    for row in schedule_rows: #
+        time_row = TimeTable.query.get(row[0].時限)
         time_str = f"({time_row.開始時刻.strftime('%H:%M')}-{time_row.終了時刻.strftime('%H:%M')})" if time_row else ""
         
-        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間") #
-        teacher = row[2] if row[2] else "" #
-
-        period_box = BoxComponent(
-            layout="vertical",
-            margin="lg",
-            spacing="sm",
-            contents=[
-                TextComponent(
-                    text=f"{row[0].時限}限 {time_str}",
-                    weight="bold",
-                    color="#1E90FF" # (例: 時限の色)
-                ),
-                TextComponent(
-                    text=f"{subject_name}",
-                    size="md",
-                    weight="bold",
-                    wrap=True
-                ),
+        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間")
+        
+        # ▼▼▼ 修正ポイント ▼▼▼
+        # teacher 変数には None が入るようにする
+        teacher = row[2] if row[2] else None 
+        
+        # 授業ごとのBoxコンポーネントの中身を動的に作成
+        period_contents = [
+            TextComponent(
+                text=f"{row[0].時限}限 {time_str}",
+                weight="bold",
+                color="#1E90FF" # (時限の色)
+            ),
+            TextComponent(
+                text=f"{subject_name}",
+                size="md",
+                weight="bold",
+                wrap=True
+            )
+        ]
+        
+        # ▼▼▼ 修正ポイント ▼▼▼
+        # teacher 変数が None でない（中身がある）場合のみ、
+        # 教員名の TextComponent をリストに追加する
+        if teacher:
+            period_contents.append(
                 TextComponent(
                     text=f"{teacher}",
                     size="sm",
                     color="#666666",
                     wrap=True
                 )
-            ]
+            )
+        # ▲▲▲ 修正ここまで ▲▲▲
+
+        period_box = BoxComponent(
+            layout="vertical",
+            margin="lg",
+            spacing="sm",
+            contents=period_contents # ⇐ 動的に作成したリストを使用
         )
+        
         body_contents.append(period_box)
         body_contents.append(SeparatorComponent(margin="lg")) # 授業ごとの区切り線
 
@@ -642,7 +657,7 @@ def get_schedule_for_line(target_date):
     
     # BubbleContainerオブジェクトを返す
     return bubble
-
+    
 def get_attendance_summary_for_line(line_user_id):
     """LINEユーザーIDに対応する学生の出席サマリーを返す"""
     
