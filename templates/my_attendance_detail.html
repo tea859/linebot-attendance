@@ -16,6 +16,26 @@
     </style>
 </head>
 <body class="bg-gray-100 p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-indigo-500 flex justify-between items-center">
+            
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">{{ student_name }} さんの出席詳細</h1>
+                <p class="text-gray-500 mt-1">第{{ selected_kiki }}期: {{ subject_filter }}</p>
+            </div>
+            
+            {% if is_portal_view %}
+                <a href="{{ url_for('my_portal') }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
+                    ← マイポータルに戻る
+                </a>
+            {% else %}
+                <a href="{{ url_for('my_attendance', student_id=student_id, kiki=selected_kiki) }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
+                    ← サマリー一覧に戻る
+                </a>
+            {% endif %}
+            
+        </header>
+    </div>
     <main class="bg-white p-6 rounded-xl shadow-xl">
         <div class="space-y-4">
             {% for row in report_data %}
