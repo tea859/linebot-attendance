@@ -31,6 +31,10 @@
                         <div class="border border-gray-200 p-4 rounded-lg">
                             <h3 class="text-lg font-bold text-gray-800">{{ row.subject }}</h3>
                             <p>出席率: {{ row.attendance_rate }}%</p>
+                            <a href="{{ url_for('my_portal_detail', kiki=selected_kiki, subject=item.subject) }}" 
+                               class="text-blue-600 hover:text-blue-800">
+                                詳細を見る
+                            </a>
                         </div>
                         {% endfor %}
                     </div>
