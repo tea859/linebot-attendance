@@ -25,6 +25,11 @@ from linebot.models import (
 )
 from linebot.models import QuickReply, QuickReplyButton, MessageAction
 
+# ▼▼▼ 以下を追記 (または既存のimportに追加) ▼▼▼
+from linebot.models import (
+    FlexSendMessage, BubbleContainer, BoxComponent, 
+    TextComponent, SeparatorComponent
+
 # --- ▼ SQLAlchemy (B案) に変更 ▼ ---
 from flask_sqlalchemy import SQLAlchemy
 # 以下の行が重要です。必要な型と関数だけをインポートします。
@@ -67,14 +72,14 @@ else:
 # 2. Flask-Login と Mail の設定 
 # ----------------------------------------------------------------------
 
-app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
+app.secret_key = os.environ.('SECRET_KEY', 'default_fallback_key_if_not_set')
 
 # .env からメール設定を読み込む
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 465
 app.config['MAIL_USE_SSL'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_USERNAME'] = os.environ.('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.('MAIL_PASSWORD')
 mail = Mail(app)
 
 login_manager = LoginManager()
@@ -93,13 +98,13 @@ class User(UserMixin):
         self.username = username
         self.password = password # 🚨 注意: 管理者パスワードはハッシュ化されていません
         
-    # 🚨 get_idメソッドを追加
-    def get_id(self):
+    # 🚨 _idメソッドを追加
+    def _id(self):
         # ユーザーIDとして「admin-」というプレフィックスを付けて返す
         return f"admin-{self.id}"
 
 admin_user_db = {
-    "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
+    "1": User("1", "admin", os.environ.('ADMIN_PASSWORD'))
 }
 
 # app.py 内の関数
@@ -112,13 +117,13 @@ def load_user(user_id):
     if user_id.startswith('admin-'):
         # 管理者ユーザーを読み込む
         admin_id = user_id.split('-')[1]
-        return admin_user_db.get(admin_id)
+        return admin_user_db.(admin_id)
         
     elif user_id.startswith('student-'):
         # 学生ユーザーを読み込む
         try:
             student_id = int(user_id.split('-')[1])
-            return 学生.query.get(student_id)
+            return 学生.query.(student_id)
         except:
             return None
     return None
@@ -162,7 +167,7 @@ class 学生(UserMixin, db.Model):
     face_data = relationship("FaceData", back_populates="student", uselist=False, cascade="all, delete-orphan")
 
     # 🚨 Flask-Loginのためのメソッドを追加
-    def get_id(self):
+    def _id(self):
         # ユーザーIDとして「student-」というプレフィックスを付けて返す
         return f"student-{self.学生ID}"
 
@@ -526,7 +531,7 @@ YOBI_MAP = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0
 ROMAN_TO_INT = {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4}
 YOBI_MAP_REVERSE = {v: k for k, v in YOBI_MAP.items()}
 
-def get_current_kiki():
+def _current_kiki():
     now = datetime.now()
     today_str = f"{now.year}/{now.month}/{now.day}"
     result = 授業計画.query.filter_by(日付=today_str).first()
@@ -548,7 +553,7 @@ def initialize_default_schedule():
         print(f"【WARNING】デフォルト時間割の初期化に失敗しました: {e}")
 
 def get_schedule_for_line(target_date):
-    """指定された日付の時間割をテキスト形式で返す"""
+    """指定された日付の時間割を「BubbleContainer」または「エラー文字列」で返す"""
     
     # 曜日コード (0=月, 1=火, ...)
     yobi_code = target_date.weekday() 
@@ -565,7 +570,7 @@ def get_schedule_for_line(target_date):
         kiki = get_current_kiki() # 授業計画がない場合は現在の期を使用
         yobi_to_use = yobi_str
     
-    # 時間割データの取得
+    # 時間割データの取得 (既存のロジック)
     schedule_rows = db.session.query(
         時間割, 授業.授業科目名, 授業.担当教員
     ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
@@ -573,19 +578,69 @@ def get_schedule_for_line(target_date):
      .order_by(時間割.時限).all()
      
     if not schedule_rows:
-        return f"{date_str} ({yobi_str}): 授業計画が見つからないか、休校日です。"
+        # エラー時や休校日は「文字列」を返す
+        return f"📅 {date_str} ({yobi_str}):\n授業計画が見つからないか、休校日です。"
 
-    output = [f"📅 {date_str} ({yobi_to_use}) - 第{kiki}期 の時間割"]
+    # --- ▼▼▼ ここからFlex Messageの組み立て ▼▼▼ ---
+    
+    body_contents = []
+    
+    # 1. ヘッダー部分
+    body_contents.append(TextComponent(
+        text=f"📅 {date_str} ({yobi_to_use})",
+        weight="bold", size="lg", margin="md"
+    ))
+    body_contents.append(TextComponent(
+        text=f"第{kiki}期 の時間割",
+        size="sm", color="#666666", margin="sm"
+    ))
+    body_contents.append(SeparatorComponent(margin="lg"))
+
+    # 2. 各時間割
     for row in schedule_rows:
-        time_row = TimeTable.query.get(row[0].時限) # TimeTableにアクセス
+        time_row = TimeTable.query.get(row[0].時限) #
         time_str = f"({time_row.開始時刻.strftime('%H:%M')}-{time_row.終了時刻.strftime('%H:%M')})" if time_row else ""
         
-        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間")
-        teacher = row[2] if row[2] else ""
+        subject_name = row[1] if row[1] else (row[0].備考 if row[0].備考 else "空き時間") #
+        teacher = row[2] if row[2] else "" #
 
-        output.append(f"  {row[0].時限}限 {time_str}\n  {subject_name} {teacher}")
+        period_box = BoxComponent(
+            layout="vertical",
+            margin="lg",
+            spacing="sm",
+            contents=[
+                TextComponent(
+                    text=f"{row[0].時限}限 {time_str}",
+                    weight="bold",
+                    color="#1E90FF" # (例: 時限の色)
+                ),
+                TextComponent(
+                    text=f"{subject_name}",
+                    size="md",
+                    weight="bold",
+                    wrap=True
+                ),
+                TextComponent(
+                    text=f"{teacher}",
+                    size="sm",
+                    color="#666666",
+                    wrap=True
+                )
+            ]
+        )
+        body_contents.append(period_box)
+        body_contents.append(SeparatorComponent(margin="lg")) # 授業ごとの区切り線
 
-    return "\n".join(output)
+    # 3. Bubbleコンテナとしてまとめる
+    bubble = BubbleContainer(
+        body=BoxComponent(
+            layout="vertical",
+            contents=body_contents
+        )
+    )
+    
+    # BubbleContainerオブジェクトを返す
+    return bubble
 
 def get_attendance_summary_for_line(line_user_id):
     """LINEユーザーIDに対応する学生の出席サマリーを返す"""
@@ -1939,16 +1994,37 @@ if handler:
             days_ahead = 0 if received_text == "今日の時間割" else 1
             target_date = now + timedelta(days=days_ahead)
             
-            # 🚨 休日判定を追加
-            # Pythonの weekday(): 0=月, 5=土, 6=日
-            if target_date.weekday() >= 5: # 土曜日（5）または日曜日（6）の場合
-                if days_ahead == 0:
-                    reply_message = f"📅 本日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
-                else:
-                    reply_message = f"📅 明日 ({target_date.strftime('%Y/%m/%d')}) は土日祝日のため、授業はありません。"
+            # (休日判定)
+            if target_date.weekday() >= 5: # 土日
+                reply_message_text = f"📅 {target_date.strftime('%Y/%m/%d')} は土日祝日のため、授業はありません。"
+                # 土日の場合はテキストで返信
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=reply_message_text, quick_reply=quick_reply_buttons)
+                )
+                return # ★ここで処理を終了
+
             else:
-                # 授業日であれば、既存の関数を呼び出す
-                reply_message = get_schedule_for_line(target_date)
+                # ▼▼▼ ここが変更点 ▼▼▼
+                # get_schedule_for_line が BubbleContainer または 文字列 を返す
+                schedule_data = get_schedule_for_line(target_date) 
+                
+                if isinstance(schedule_data, BubbleContainer):
+                    # 戻り値が BubbleContainer だったら FlexSendMessage で送信
+                    reply_message = FlexSendMessage(
+                        alt_text=f"{target_date.strftime('%Y/%m/%d')}の時間割",
+                        contents=schedule_data, # ここにBubbleを入れる
+                        quick_reply=quick_reply_buttons # FlexにもQuickReplyは付けられる
+                    )
+                else:
+                    # 戻り値が 文字列 だったら (エラー時) TextSendMessage で送信
+                    reply_message = TextSendMessage(
+                        text=schedule_data, # (例: "授業計画が見つかりません。")
+                        quick_reply=quick_reply_buttons
+                    )
+                
+                line_bot_api.reply_message(event.reply_token, reply_message)
+                return # ★ここで処理を終了
             
         elif received_text == "出席サマリー":
             # 出席サマリー機能（ここではシンプルに実装）
