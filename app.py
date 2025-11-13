@@ -1645,13 +1645,21 @@ def report_summary():
                 summary = []
                 for student in students:
                     sql_counts = text("""
-                        SELECT R."状態", COUNT(R."状態") 
-                        FROM "出席記録" R 
-                        JOIN "時間割" T ON R."授業ID" = T."授業ID" AND R."時限" = T."時限" 
-                        WHERE R."授業ID" = :sid AND R."学生ID" = :stid AND T."学期" = :kiki 
+                        SELECT R."状態", COUNT(R."状態")
+                        FROM "出席記録" R
+                        JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+                        WHERE R."授業ID" = :sid 
+                          AND R."学生ID" = :stid 
+                          AND P."期" = :kiki_int
                         GROUP BY R."状態"
                     """)
-                    counts = dict(db.session.execute(sql_counts, {"sid": selected_subject_id, "stid": student.学生ID, "kiki": selected_kiki}).fetchall())
+                    
+                    # :kiki (文字列) ではなく :kiki_int (整数) を渡すように変更
+                    counts = dict(db.session.execute(sql_counts, {
+                        "sid": selected_subject_id, 
+                        "stid": student.学生ID, 
+                        "kiki_int": int(selected_kiki) 
+                    }).fetchall())
                     
                     attended_count = counts.get('出席', 0)
                     tardy_count = counts.get('遅刻', 0)
@@ -1733,8 +1741,22 @@ def export_report_summary():
         
         report_data = [] 
         for student in students:
-            sql_counts = text('SELECT R."状態", COUNT(R."状態") FROM "出席記録" R JOIN "時間割" T ON R."授業ID" = T."授業ID" AND R."時限" = T."時限" WHERE R."授業ID" = :sid AND R."学生ID" = :stid AND T."学期" = :kiki GROUP BY R."状態"')
-            counts = dict(db.session.execute(sql_counts, {"sid": selected_subject_id, "stid": student.学生ID, "kiki": selected_kiki}).fetchall())
+            sql_counts = text("""
+                SELECT R."状態", COUNT(R."状態")
+                FROM "出席記録" R
+                JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+                WHERE R."授業ID" = :sid 
+                  AND R."学生ID" = :stid 
+                  AND P."期" = :kiki_int
+                GROUP BY R."状態"
+            """)
+
+            # :kiki (文字列) ではなく :kiki_int (整数) を渡すように変更
+            counts = dict(db.session.execute(sql_counts, {
+                "sid": selected_subject_id, 
+                "stid": student.学生ID, 
+                "kiki_int": int(selected_kiki)
+            }).fetchall())
             
             attended_count = counts.get('出席', 0)
             tardy_count = counts.get('遅刻', 0)
