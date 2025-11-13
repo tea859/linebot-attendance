@@ -802,12 +802,31 @@ def get_attendance_summary_for_line(line_user_id):
         )
         body_contents.append(subject_box)
 
+    portal_url = f"{BASE_URL}{url_for('student_login')}" 
+
+    footer_box = BoxComponent(
+        layout="vertical",
+        spacing="sm",
+        contents=[
+            SeparatorComponent(), # 区切り線
+            ButtonComponent(
+                style="link", # 'link'スタイルがシャレオツ
+                height="sm",
+                action=URIAction(label="Webポータルで詳細を見る", uri=portal_url)
+            )
+        ]
+    )
+    
+    # --- ▲▲▲ 追記ここまで ▲▲▲ ---
+
+
     # Bubbleコンテナとしてまとめる
     bubble = BubbleContainer(
         body=BoxComponent(
             layout="vertical",
             contents=body_contents
-        )
+        ),
+        footer=footer_box  # ⇐ 追記したfooterをここで渡す
     )
     
     return bubble
