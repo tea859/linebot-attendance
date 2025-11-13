@@ -73,14 +73,14 @@ else:
 # 2. Flask-Login と Mail の設定 
 # ----------------------------------------------------------------------
 
-app.secret_key = os.environ.('SECRET_KEY', 'default_fallback_key_if_not_set')
+app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
 
 # .env からメール設定を読み込む
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 465
 app.config['MAIL_USE_SSL'] = True
-app.config['MAIL_USERNAME'] = os.environ.('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.('MAIL_PASSWORD')
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 mail = Mail(app)
 
 login_manager = LoginManager()
@@ -105,7 +105,7 @@ class User(UserMixin):
         return f"admin-{self.id}"
 
 admin_user_db = {
-    "1": User("1", "admin", os.environ.('ADMIN_PASSWORD'))
+    "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
 }
 
 # app.py 内の関数
@@ -118,13 +118,13 @@ def load_user(user_id):
     if user_id.startswith('admin-'):
         # 管理者ユーザーを読み込む
         admin_id = user_id.split('-')[1]
-        return admin_user_db.(admin_id)
+        return admin_user_db.get(admin_id)
         
     elif user_id.startswith('student-'):
         # 学生ユーザーを読み込む
         try:
             student_id = int(user_id.split('-')[1])
-            return 学生.query.(student_id)
+            return 学生.query.get(student_id)
         except:
             return None
     return None
@@ -532,7 +532,7 @@ YOBI_MAP = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0
 ROMAN_TO_INT = {'Ⅰ': 1, 'Ⅱ': 2, 'Ⅲ': 3, 'Ⅳ': 4}
 YOBI_MAP_REVERSE = {v: k for k, v in YOBI_MAP.items()}
 
-def _current_kiki():
+def get_current_kiki():
     now = datetime.now()
     today_str = f"{now.year}/{now.month}/{now.day}"
     result = 授業計画.query.filter_by(日付=today_str).first()
@@ -1935,7 +1935,18 @@ if handler:
         user_id = event.source.user_id
         reply_message = ""
         now = datetime.now()
-
+        quick_reply_buttons = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
+            QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
+            QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
+            
+            # 👇 新しく追加する一時退出のボタン
+            QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
+            QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
+            
+            # 👇 最終退室のボタン（既存の「退室」ボタンを明確化）
+            QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
+        ])
         # --- 1. アカウント登録処理 ---
         if received_text.startswith("登録"):
             try:
@@ -2060,19 +2071,6 @@ if handler:
             reply_message = process_exit_record(user_id)         
         else:
             reply_message = f"「{received_text}」を受け取りました。"
-
-        quick_reply_buttons = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
-            QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
-            QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
-            
-            # 👇 新しく追加する一時退出のボタン
-            QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
-            QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
-            
-            # 👇 最終退室のボタン（既存の「退室」ボタンを明確化）
-            QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
-        ])
 
         line_bot_api.reply_message(
             event.reply_token,
