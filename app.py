@@ -2346,11 +2346,77 @@ def my_portal():
     # ▼▼▼ 時間割・サマリーデータ取得ロジック ▼▼▼
     # ------------------------------------------------------------------
 
-    # --- 1. 学期情報を取得 ---
     selected_kiki = get_current_kiki()
+    kiki_int = int(selected_kiki)
     
-    # (my_attendanceルートのロジックを流用。今はダミーのまま)
-    report_data = [] 
+    # --- ▼▼▼ (ここから修正) LINE Botの授業ごとサマリー計算ロジックを移植 ▼▼▼ ---
+    
+    # 1. 履修科目の一覧を取得
+    sql_enrolled = text("""
+        SELECT DISTINCT S."授業科目名", S."授業ID"
+        FROM "時間割" T
+        JOIN "授業" S ON T."授業ID" = S."授業ID"
+        WHERE T."学期" = :kiki AND T."授業ID" != 0 
+        ORDER BY S."授業科目名"
+    """) #
+    enrolled_subjects = db.session.execute(sql_enrolled, {"kiki": selected_kiki}).fetchall()
+
+    report_data = [] # ⬅️ 空のリストをまず定義
+
+    if enrolled_subjects:
+        # 2. 各授業の出席データを集計
+        for subject_name, subject_id in enrolled_subjects:
+            
+            # 2a. その授業の「今日までの総コマ数」を計算
+            sql_schedule = text('SELECT T."曜日", COUNT(T."時限") FROM "時間割" T WHERE T."授業ID" = :sid AND T."学期" = :kiki GROUP BY T."曜日"')
+            schedule_data = db.session.execute(sql_schedule, {"sid": subject_id, "kiki": selected_kiki}).fetchall()
+            
+            total_classes_so_far = 0
+            for day_of_week, periods_per_day in schedule_data:
+                day_code = YOBI_MAP.get(day_of_week) #
+                if day_code is not None:
+                    sql_days_so_far = text("""
+                        SELECT COUNT("日付") FROM "授業計画" 
+                        WHERE "期" = :kiki AND "授業曜日" = :code 
+                        AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+                    """) #
+                    total_days_so_far = db.session.execute(sql_days_so_far, {"kiki": kiki_int, "code": day_code}).scalar()
+                    total_classes_so_far += total_days_so_far * periods_per_day
+            
+            # 2b. その授業の「出席記録」を集計
+            sql_records = text("""
+                SELECT R."状態", COUNT(R."状態")
+                FROM "出席記録" R
+                JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+                WHERE R."学生ID" = :sid 
+                  AND P."期" = :kiki_int
+                  AND R."授業ID" = :subject_id
+                GROUP BY R."状態"
+            """)
+            records_count = dict(db.session.execute(sql_records, {
+                "sid": student_id, 
+                "kiki_int": kiki_int,
+                "subject_id": subject_id
+            }).fetchall())
+
+            attendance_count = records_count.get('出席', 0)
+            tardy_count = records_count.get('遅刻', 0)
+            absent_count = records_count.get('欠席', 0)
+
+            # 2c. 出席率を計算
+            attendance_rate = 0.0
+            if total_classes_so_far > 0:
+                attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1)
+            
+            # 2d. データをリストに追加 (my_portal.html が期待するデータ形式)
+            report_data.append({
+                "subject": subject_name,  # 授業名
+                "attendance_rate": attendance_rate, # 出席率
+                "total_classes_so_far": total_classes_so_far, # 今日までのコマ数
+                "attendance_count": attendance_count, # 出席
+                "tardy_count": tardy_count, # 遅刻
+                "absent_count": absent_count # 欠席
+            })
     
     # --- 2. 時間割データを取得 ---
     # 授業と教室をJOINして取得
