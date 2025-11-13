@@ -2493,6 +2493,98 @@ def my_portal():
                            )
 
 
+#
+# /my_portal の関数の下あたりに追加
+#
+
+@app.route("/my_portal_detail")
+@login_required # 1. ログイン必須の「鍵」
+def my_portal_detail():
+    """ (新機能) 学生専用ポータル - 出席詳細 """
+
+    # 2. 「学生」じゃなければ追い出す門番
+    if not current_user.get_id().startswith('student-'):
+        flash("管理者はこのページにアクセスできません。", "error")
+        return redirect(url_for('index'))
+    
+    # 3. ログイン中の「自分」の情報を取得
+    student_id = current_user.学生ID
+    student_name = current_user.学生名
+    
+    # 4. URLから「どの授業」か、「どの学期」かを受け取る
+    selected_kiki = request.args.get("kiki", "1")
+    subject_name_filter = request.args.get("subject")
+
+    if not subject_name_filter:
+        # (もし?subject= が指定されていなければ)
+        flash("詳細を表示する授業が指定されていません。", "error")
+        return redirect(url_for('my_portal'))
+
+    # 5. DBから「自分の」「指定された授業」の記録だけを引っこ抜くSQL
+    #    (管理者用の /my_attendance_detail とほぼ同じ)
+    sql_records = text("""
+        SELECT R."ID", R."出席時刻", R."状態", S."授業科目名"
+        FROM "出席記録" R
+        JOIN "授業" S ON R."授業ID" = S."授業ID"
+        WHERE R."学生ID" = :sid 
+          AND S."授業科目名" = :subject_name
+          AND R."授業ID" IN (
+            SELECT DISTINCT T."授業ID" FROM "時間割" T WHERE T."学期" = :kiki
+          )
+        ORDER BY R."出席時刻"
+    """)
+    
+    # 6. SQLを実行する
+    records = db.session.execute(sql_records, {
+        "sid": student_id,                 # ⬅️ 強制的に「自分」のID
+        "subject_name": subject_name_filter, # ⬅️ URLで指定された授業名
+        "kiki": selected_kiki              # ⬅️ URLで指定された学期
+    }).fetchall()
+    
+    # 7. データをHTMLで使いやすいように「仕分け」する
+    report_data_detail = []
+    status_map = {"出席": "○", "遅刻": "△", "欠席": "×"}
+    
+    if records:
+        # 記録があった場合
+        row = {"subject": subject_name_filter} # 授業名で見出しを作る
+        max_recorded_count = len(records)
+        
+        for i in range(max_recorded_count):
+            count_str = str(i + 1) 
+            record_id, timestamp, status, _ = records[i]
+            
+            # 日付を "11/13" の形にする
+            formatted_date = timestamp.strftime('%m/%d') 
+            status_symbol = status_map.get(status, status)
+            
+            # HTML側で "count_1_display" や "count_2_display" として使えるようにする
+            row[f"count_{count_str}_id"] = record_id
+            row[f"count_{count_str}_status"] = status_symbol
+            row[f"count_{count_str}_display"] = f"{status_symbol} ({formatted_date})"
+            row[f"count_{count_str}_original_status"] = status
+        
+        report_data_detail.append(row)
+        
+    else:
+        # 記録が0件だった場合（ありえないはずだが、念のため）
+        max_recorded_count = 0
+        report_data_detail.append({"subject": subject_name_filter})
+
+    # 8. HTMLテンプレートにデータを渡して表示！
+    # (my_attendance_detail.html を使い回す)
+    return render_template("my_attendance_detail.html", 
+                           student_id=student_id, 
+                           student_name=student_name,
+                           report_data=report_data_detail, 
+                           max_count=max_recorded_count,
+                           selected_kiki=selected_kiki, 
+                           kikis=["1", "2", "3", "4"],
+                           subject_filter=subject_name_filter,
+                           # 9. ポータルに戻るためのフラグを追加
+                           is_portal_view=True 
+                           )
+
 @app.route("/student_logout")
 @login_required
 def student_logout():
