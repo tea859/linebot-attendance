@@ -659,18 +659,162 @@ def get_schedule_for_line(target_date):
     return bubble
     
 def get_attendance_summary_for_line(line_user_id):
-    """LINEユーザーIDに対応する学生の出席サマリーを返す"""
+    """LINEユーザーIDに対応する学生の出席サマリーを「BubbleContainer」または「エラー文字列」で返す"""
     
-    student_id = get_student_id_from_line_user(line_user_id) # ⬅️ 紐付けテーブルから取得！
-    
+    student_id = get_student_id_from_line_user(line_user_id) #
     if student_id is None:
-        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
+        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。" #
     
-    # 紐づいた学生情報と出席レポートロジックの実行
-    student = 学生.query.get(student_id)
-    # ... (レポート機能のロジックを流用し、student_idで出席記録を集計してテキストで返す)
+    student = 学生.query.get(student_id) #
+    selected_kiki = get_current_kiki() #
     
-    return f"【学生ID:{student_id} / {student.学生名}さん】の出席サマリー:\n詳細なレポートはWeb管理画面を参照してください。"
+    # --- ▼▼▼ 授業別レポートのロジックを流用 ▼▼▼ ---
+    
+    # 1. この学期に履修している全授業IDを取得
+    sql_enrolled_ids = text("""
+        SELECT DISTINCT T."授業ID"
+        FROM "時間割" T
+        WHERE T."学期" = :kiki AND T."授業ID" != 0 
+    """)
+    enrolled_subject_ids_result = db.session.execute(sql_enrolled_ids, {"kiki": selected_kiki}).fetchall()
+    enrolled_subject_ids = [row[0] for row in enrolled_subject_ids_result]
+    
+    if not enrolled_subject_ids:
+        return f"📅 第{selected_kiki}期: \n履修中の授業が見つかりませんでした。"
+
+    # 2. 今日までの総授業回数を計算
+    total_classes_so_far = 0
+    kiki_int = int(selected_kiki) # 授業計画の '期' は整数型のため
+    
+    # 授業計画から、今日までの日付の (曜日コード, 回数) を集計
+    sql_days_so_far = text("""
+        SELECT "授業曜日", COUNT("日付") 
+        FROM "授業計画" 
+        WHERE "期" = :kiki 
+          AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+        GROUP BY "授業曜日"
+    """)
+    days_count_by_yobi = dict(db.session.execute(sql_days_so_far, {"kiki": kiki_int}).fetchall())
+    
+    # 時間割から、各授業の (曜日, 1日のコマ数) を集計
+    sql_periods_per_day = text("""
+        SELECT "授業ID", "曜日", COUNT("時限") 
+        FROM "時間割" 
+        WHERE "学期" = :kiki AND "授業ID" IN :subject_ids
+        GROUP BY "授業ID", "曜日"
+    """)
+    # 授業IDが1つでもリストとして渡すために tuple() を使う
+    schedule_data = db.session.execute(sql_periods_per_day, {"kiki": selected_kiki, "subject_ids": tuple(enrolled_subject_ids)}).fetchall()
+
+    for subject_id, day_of_week, periods_per_day in schedule_data:
+        day_code = YOBI_MAP.get(day_of_week) #
+        if day_code in days_count_by_yobi:
+            # (例) 授業曜日'1'(月曜) が
+            total_days_so_far = days_count_by_yobi[day_code]
+            # (今日まで月曜が10回) * (月曜は1日2コマ) = 20コマ
+            total_classes_so_far += (total_days_so_far * periods_per_day)
+
+    # 3. 出席記録を集計 (日付で授業計画とJOIN)
+    sql_records = text("""
+        SELECT R."状態", COUNT(R."状態")
+        FROM "出席記録" R
+        JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+        WHERE R."学生ID" = :sid 
+          AND P."期" = :kiki_int
+          AND R."授業ID" IN :subject_ids
+        GROUP BY R."状態"
+    """)
+    records_count = dict(db.session.execute(sql_records, {
+        "sid": student_id, 
+        "kiki_int": kiki_int,
+        "subject_ids": tuple(enrolled_subject_ids) # 履修科目IDリスト
+    }).fetchall())
+
+    attendance_count = records_count.get('出席', 0)
+    tardy_count = records_count.get('遅刻', 0)
+    absent_count = records_count.get('欠席', 0)
+    
+    total_recorded = attendance_count + tardy_count + absent_count
+    # 'その他' は、今日までの総コマ数と、記録されたコマ数の差分
+    unrecorded_count = total_classes_so_far - total_recorded
+    if unrecorded_count < 0:
+        unrecorded_count = 0
+
+    # 4. 出席率を計算
+    attendance_rate = 0.0
+    if total_classes_so_far > 0:
+        attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1) #
+    
+    # --- ▲▲▲ 計算ロジックここまで ▲▲▲ ---
+
+    # --- ▼▼▼ Flex Messageの組み立て ▼▼▼ ---
+    
+    body_contents = []
+    
+    # 1. ヘッダー
+    body_contents.append(TextComponent(
+        text=f"{student.学生名} さん",
+        weight="bold", size="lg", margin="md"
+    ))
+    body_contents.append(TextComponent(
+        text=f"第{selected_kiki}期 出席サマリー (本日時点)",
+        size="sm", color="#666666", margin="sm", wrap=True
+    ))
+    body_contents.append(SeparatorComponent(margin="lg"))
+
+    # 2. 出席率
+    body_contents.append(BoxComponent(
+        layout="vertical",
+        margin="lg",
+        contents=[
+            TextComponent(text="出席率 (出席 ÷ 今日までの総コマ数)", size="sm", color="#666666", wrap=True),
+            TextComponent(
+                text=f"{attendance_rate}%",
+                weight="bold",
+                size="xxl",
+                color="#1E90FF",
+                margin="md"
+            ),
+            TextComponent(text=f"出席 {attendance_count}コマ / 総計 {total_classes_so_far}コマ", size="sm", color="#666666", wrap=True)
+        ]
+    ))
+    
+    body_contents.append(SeparatorComponent(margin="lg"))
+
+    # 3. 内訳 (詳細行を作るためのヘルパー関数)
+    def create_detail_row(label, value, color="#000000"):
+        return BoxComponent(
+            layout="baseline",
+            spacing="sm",
+            margin="sm",
+            contents=[
+                TextComponent(text=label, color="#aaaaaa", size="sm", flex=2),
+                TextComponent(text=str(value), color=color, weight="bold", size="md", flex=3, align="end")
+            ]
+        )
+    
+    body_contents.append(BoxComponent(
+        layout="vertical",
+        margin="lg",
+        spacing="sm",
+        contents=[
+            TextComponent(text="出席カウント (記録ベース)", size="sm", weight="bold"),
+            create_detail_row("出席", attendance_count, "#008000"),
+            create_detail_row("遅刻", tardy_count, "#FFA500"),
+            create_detail_row("欠席", absent_count, "#FF0000"),
+            create_detail_row("未記録/他", unrecorded_count, "#666666")
+        ]
+    ))
+
+    # Bubbleコンテナとしてまとめる
+    bubble = BubbleContainer(
+        body=BoxComponent(
+            layout="vertical",
+            contents=body_contents
+        )
+    )
+    
+    return bubble
 
 #最終退室
 def process_exit_record(line_user_id):
@@ -2054,8 +2198,24 @@ if handler:
                 return # ★ここで処理を終了
             
         elif received_text == "出席サマリー":
-            # 出席サマリー機能（ここではシンプルに実装）
-            reply_message = get_attendance_summary_for_line(user_id) # ⚠️ 新しいヘルパー関数を定義します
+            summary_data = get_attendance_summary_for_line(user_id) 
+            
+            if isinstance(summary_data, BubbleContainer):
+                # 戻り値が BubbleContainer だったら FlexSendMessage で送信
+                reply_message_obj = FlexSendMessage(
+                    alt_text=f"出席サマリー",
+                    contents=summary_data, # ここにBubbleを入れる
+                    quick_reply=quick_reply_buttons # QuickReplyも付ける
+                )
+            else:
+                # 戻り値が 文字列 だったら (エラー時) TextSendMessage で送信
+                reply_message_obj = TextSendMessage(
+                    text=summary_data, # (例: "学生IDが登録されていません。")
+                    quick_reply=quick_reply_buttons
+                )
+            
+            line_bot_api.reply_message(event.reply_token, reply_message_obj)
+            return # ★ここで処理を終了
             
         elif received_text == "退室":
             # 在室履歴を終了させるロジック
