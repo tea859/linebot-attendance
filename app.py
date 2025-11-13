@@ -28,7 +28,8 @@ from linebot.models import QuickReply, QuickReplyButton, MessageAction
 # ▼▼▼ 以下を追記 (または既存のimportに追加) ▼▼▼
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, 
-    TextComponent, SeparatorComponent
+    TextComponent, SeparatorComponent,
+    ButtonComponent, URIAction
 )
 
 # --- ▼ SQLAlchemy (B案) に変更 ▼ ---
@@ -43,6 +44,7 @@ TEMP_EXIT_STATUS = "一時退出中"
 SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TOKEN_HERE')
 load_dotenv()
 app = Flask(__name__)
+BASE_URL = os.environ.get('BASE_URL', 'http://127.0.0.1:5000') # 開発中はローカルを指す
 
 # ----------------------------------------------------------------------
 # 1. データベース設定 (PostgreSQL/SQLite両対応)
