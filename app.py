@@ -659,92 +659,87 @@ def get_schedule_for_line(target_date):
     return bubble
     
 def get_attendance_summary_for_line(line_user_id):
-    """LINEユーザーIDに対応する学生の出席サマリーを「BubbleContainer」または「エラー文字列」で返す"""
+    """(授業ごと版) LINEユーザーIDに対応する学生の出席サマリーを「BubbleContainer」または「エラー文字列」で返す"""
     
     student_id = get_student_id_from_line_user(line_user_id) #
     if student_id is None:
-        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。" #
+        return "⚠️ あなたの学生IDが登録されていません。\n「登録:学生ID」の形式で一度登録してください。"
     
     student = 学生.query.get(student_id) #
     selected_kiki = get_current_kiki() #
+    kiki_int = int(selected_kiki)
+
+    # --- ▼▼▼ /my_attendance (Web版) のロジックを流用 ▼▼▼ ---
     
-    # --- ▼▼▼ 授業別レポートのロジックを流用 ▼▼▼ ---
-    
-    # 1. この学期に履修している全授業IDを取得
-    sql_enrolled_ids = text("""
-        SELECT DISTINCT T."授業ID"
+    # 1. 履修科目の一覧を取得
+    sql_enrolled = text("""
+        SELECT DISTINCT S."授業科目名", S."授業ID"
         FROM "時間割" T
+        JOIN "授業" S ON T."授業ID" = S."授業ID"
         WHERE T."学期" = :kiki AND T."授業ID" != 0 
-    """)
-    enrolled_subject_ids_result = db.session.execute(sql_enrolled_ids, {"kiki": selected_kiki}).fetchall()
-    enrolled_subject_ids = [row[0] for row in enrolled_subject_ids_result]
-    
-    if not enrolled_subject_ids:
-        return f"📅 第{selected_kiki}期: \n履修中の授業が見つかりませんでした。"
+        ORDER BY S."授業科目名"
+    """) #
+    enrolled_subjects = db.session.execute(sql_enrolled, {"kiki": selected_kiki}).fetchall()
 
-    # 2. 今日までの総授業回数を計算
-    total_classes_so_far = 0
-    kiki_int = int(selected_kiki) # 授業計画の '期' は整数型のため
-    
-    # 授業計画から、今日までの日付の (曜日コード, 回数) を集計
-    sql_days_so_far = text("""
-        SELECT "授業曜日", COUNT("日付") 
-        FROM "授業計画" 
-        WHERE "期" = :kiki 
-          AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
-        GROUP BY "授業曜日"
-    """)
-    days_count_by_yobi = dict(db.session.execute(sql_days_so_far, {"kiki": kiki_int}).fetchall())
-    
-    # 時間割から、各授業の (曜日, 1日のコマ数) を集計
-    sql_periods_per_day = text("""
-        SELECT "授業ID", "曜日", COUNT("時限") 
-        FROM "時間割" 
-        WHERE "学期" = :kiki AND "授業ID" IN :subject_ids
-        GROUP BY "授業ID", "曜日"
-    """)
-    # 授業IDが1つでもリストとして渡すために tuple() を使う
-    schedule_data = db.session.execute(sql_periods_per_day, {"kiki": selected_kiki, "subject_ids": tuple(enrolled_subject_ids)}).fetchall()
+    if not enrolled_subjects:
+        return f"📅 第{selected_kiki}期: \n履修中の授業データが見つかりませんでした。"
 
-    for subject_id, day_of_week, periods_per_day in schedule_data:
-        day_code = YOBI_MAP.get(day_of_week) #
-        if day_code in days_count_by_yobi:
-            # (例) 授業曜日'1'(月曜) が
-            total_days_so_far = days_count_by_yobi[day_code]
-            # (今日まで月曜が10回) * (月曜は1日2コマ) = 20コマ
-            total_classes_so_far += (total_days_so_far * periods_per_day)
-
-    # 3. 出席記録を集計 (日付で授業計画とJOIN)
-    sql_records = text("""
-        SELECT R."状態", COUNT(R."状態")
-        FROM "出席記録" R
-        JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
-        WHERE R."学生ID" = :sid 
-          AND P."期" = :kiki_int
-          AND R."授業ID" IN :subject_ids
-        GROUP BY R."状態"
-    """)
-    records_count = dict(db.session.execute(sql_records, {
-        "sid": student_id, 
-        "kiki_int": kiki_int,
-        "subject_ids": tuple(enrolled_subject_ids) # 履修科目IDリスト
-    }).fetchall())
-
-    attendance_count = records_count.get('出席', 0)
-    tardy_count = records_count.get('遅刻', 0)
-    absent_count = records_count.get('欠席', 0)
+    # 2. 各授業の出席データを集計
+    report_data = []
     
-    total_recorded = attendance_count + tardy_count + absent_count
-    # 'その他' は、今日までの総コマ数と、記録されたコマ数の差分
-    unrecorded_count = total_classes_so_far - total_recorded
-    if unrecorded_count < 0:
-        unrecorded_count = 0
+    for subject_name, subject_id in enrolled_subjects:
+        
+        # 2a. その授業の「今日までの総コマ数」を計算
+        sql_schedule = text('SELECT T."曜日", COUNT(T."時限") FROM "時間割" T WHERE T."授業ID" = :sid AND T."学期" = :kiki GROUP BY T."曜日"')
+        schedule_data = db.session.execute(sql_schedule, {"sid": subject_id, "kiki": selected_kiki}).fetchall()
+        
+        total_classes_so_far = 0
+        for day_of_week, periods_per_day in schedule_data:
+            day_code = YOBI_MAP.get(day_of_week) #
+            if day_code is not None:
+                sql_days_so_far = text("""
+                    SELECT COUNT("日付") FROM "授業計画" 
+                    WHERE "期" = :kiki AND "授業曜日" = :code 
+                    AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+                """) #
+                total_days_so_far = db.session.execute(sql_days_so_far, {"kiki": kiki_int, "code": day_code}).scalar()
+                total_classes_so_far += total_days_so_far * periods_per_day
+        
+        # 2b. その授業の「出席記録」を集計
+        sql_records = text("""
+            SELECT R."状態", COUNT(R."状態")
+            FROM "出席記録" R
+            JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+            WHERE R."学生ID" = :sid 
+              AND P."期" = :kiki_int
+              AND R."授業ID" = :subject_id
+            GROUP BY R."状態"
+        """)
+        records_count = dict(db.session.execute(sql_records, {
+            "sid": student_id, 
+            "kiki_int": kiki_int,
+            "subject_id": subject_id
+        }).fetchall())
 
-    # 4. 出席率を計算
-    attendance_rate = 0.0
-    if total_classes_so_far > 0:
-        attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1) #
-    
+        attendance_count = records_count.get('出席', 0)
+        tardy_count = records_count.get('遅刻', 0)
+        absent_count = records_count.get('欠席', 0)
+
+        # 2c. 出席率を計算
+        attendance_rate = 0.0
+        if total_classes_so_far > 0:
+            attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1)
+        
+        # 2d. データを一時保存
+        report_data.append({
+            "subject_name": subject_name,
+            "rate": attendance_rate,
+            "total_so_far": total_classes_so_far,
+            "attendance": attendance_count,
+            "tardy": tardy_count,
+            "absent": absent_count
+        })
+
     # --- ▲▲▲ 計算ロジックここまで ▲▲▲ ---
 
     # --- ▼▼▼ Flex Messageの組み立て ▼▼▼ ---
@@ -757,54 +752,53 @@ def get_attendance_summary_for_line(line_user_id):
         weight="bold", size="lg", margin="md"
     ))
     body_contents.append(TextComponent(
-        text=f"第{selected_kiki}期 出席サマリー (本日時点)",
+        text=f"第{selected_kiki}期 出席サマリー (授業ごと)",
         size="sm", color="#666666", margin="sm", wrap=True
     ))
-    body_contents.append(SeparatorComponent(margin="lg"))
 
-    # 2. 出席率
-    body_contents.append(BoxComponent(
-        layout="vertical",
-        margin="lg",
-        contents=[
-            TextComponent(text="出席率 (出席 ÷ 今日までの総コマ数)", size="sm", color="#666666", wrap=True),
-            TextComponent(
-                text=f"{attendance_rate}%",
-                weight="bold",
-                size="xxl",
-                color="#1E90FF",
-                margin="md"
-            ),
-            TextComponent(text=f"出席 {attendance_count}コマ / 総計 {total_classes_so_far}コマ", size="sm", color="#666666", wrap=True)
-        ]
-    ))
-    
-    body_contents.append(SeparatorComponent(margin="lg"))
-
-    # 3. 内訳 (詳細行を作るためのヘルパー関数)
-    def create_detail_row(label, value, color="#000000"):
-        return BoxComponent(
-            layout="baseline",
+    # 2. 各授業の内訳
+    for item in report_data:
+        body_contents.append(SeparatorComponent(margin="lg"))
+        
+        # (授業ごとのBoxコンポーネント)
+        subject_box = BoxComponent(
+            layout="vertical",
+            margin="lg",
             spacing="sm",
-            margin="sm",
             contents=[
-                TextComponent(text=label, color="#aaaaaa", size="sm", flex=2),
-                TextComponent(text=str(value), color=color, weight="bold", size="md", flex=3, align="end")
+                # 授業名
+                TextComponent(
+                    text=f"■ {item['subject_name']}",
+                    weight="bold",
+                    size="md",
+                    wrap=True
+                ),
+                # 出席率
+                TextComponent(
+                    text=f"{item['rate']}%",
+                    weight="bold",
+                    size="lg",
+                    color="#1E90FF",
+                    margin="sm"
+                ),
+                # 詳細 (Xコマ / Yコマ中)
+                TextComponent(
+                    text=f"出席 {item['attendance']} / 総計 {item['total_so_far']}コマ",
+                    size="sm",
+                    color="#666666",
+                    wrap=True
+                ),
+                # 遅刻・欠席
+                TextComponent(
+                    text=f"(遅刻 {item['tardy']}, 欠席 {item['absent']})",
+                    size="sm",
+                    color="#AAAAAA",
+                    wrap=True,
+                    margin="sm"
+                )
             ]
         )
-    
-    body_contents.append(BoxComponent(
-        layout="vertical",
-        margin="lg",
-        spacing="sm",
-        contents=[
-            TextComponent(text="出席カウント (記録ベース)", size="sm", weight="bold"),
-            create_detail_row("出席", attendance_count, "#008000"),
-            create_detail_row("遅刻", tardy_count, "#FFA500"),
-            create_detail_row("欠席", absent_count, "#FF0000"),
-            create_detail_row("未記録/他", unrecorded_count, "#666666")
-        ]
-    ))
+        body_contents.append(subject_box)
 
     # Bubbleコンテナとしてまとめる
     bubble = BubbleContainer(
