@@ -29,6 +29,7 @@ from linebot.models import QuickReply, QuickReplyButton, MessageAction
 from linebot.models import (
     FlexSendMessage, BubbleContainer, BoxComponent, 
     TextComponent, SeparatorComponent
+)
 
 # --- ▼ SQLAlchemy (B案) に変更 ▼ ---
 from flask_sqlalchemy import SQLAlchemy
