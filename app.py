@@ -1714,7 +1714,7 @@ def my_attendance():
         if subject_name in grouped_attendance:
             if status == "出席": grouped_attendance[subject_name]["attendance_count"] += 1
             elif status == "遅刻": grouped_attendance[subject_name]["tardy_count"] += 1
-            elif status == "欠席": grouped_attendance[subject_name]["absent_count"] += 1
+            elif status == "欠席": grouped_attendance[subject_name]["absent_count"] += 1 # ⬅️ これは DB上の欠席
 
     # 4. 出席率を計算
     report_data_summary = []
@@ -1725,6 +1725,13 @@ def my_attendance():
         else:
             data["attendance_rate"] = 0.0
 
+        # 4b. 「未記録」を計算して「欠席」に合算
+        total_recorded = data["attendance_count"] + data["tardy_count"] + data["absent_count"]
+        unrecorded_count = total_classes_so_far - total_recorded
+        if unrecorded_count < 0: unrecorded_count = 0
+        
+        total_absent = data["absent_count"] + unrecorded_count # ⬅️ 合算
+
         row = {
             "subject": subject,
             "attendance_rate": data["attendance_rate"],
@@ -1732,7 +1739,7 @@ def my_attendance():
             "total_classes_so_far": data["total_classes_so_far"], 
             "attendance_count": data["attendance_count"],
             "tardy_count": data["tardy_count"],
-            "absent_count": data["absent_count"],
+            "absent_count": total_absent, # ⬅️ 合算した値を渡す
         }
         report_data_summary.append(row)
         
