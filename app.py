@@ -725,21 +725,28 @@ def get_attendance_summary_for_line(line_user_id):
 
         attendance_count = records_count.get('出席', 0)
         tardy_count = records_count.get('遅刻', 0)
-        absent_count = records_count.get('欠席', 0)
+        absent_count_db = records_count.get('欠席', 0) # ⬅️ DB上の欠席
 
         # 2c. 出席率を計算
         attendance_rate = 0.0
         if total_classes_so_far > 0:
             attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1)
         
-        # 2d. データを一時保存
+        # 2d. 「未記録」を計算して「欠席」に合算
+        total_recorded = attendance_count + tardy_count + absent_count_db
+        unrecorded_count = total_classes_so_far - total_recorded
+        if unrecorded_count < 0: unrecorded_count = 0
+        
+        total_absent = absent_count_db + unrecorded_count # ⬅️ 合算
+
+        # 2e. データを一時保存
         report_data.append({
             "subject_name": subject_name,
             "rate": attendance_rate,
             "total_so_far": total_classes_so_far,
             "attendance": attendance_count,
             "tardy": tardy_count,
-            "absent": absent_count
+            "absent": total_absent # ⬅️ 合算した値を渡す
         })
 
     # --- ▲▲▲ 計算ロジックここまで ▲▲▲ ---
@@ -1893,15 +1900,17 @@ def report_summary():
                     
                     attended_count = counts.get('出席', 0)
                     tardy_count = counts.get('遅刻', 0)
-                    absent_count = counts.get('欠席', 0)
+                    absent_count_db = counts.get('欠席', 0) # 1. DBからの欠席
                     
                     attendance_rate = 0.0
                     if total_classes_so_far > 0:
                         attendance_rate = round((attended_count / total_classes_so_far) * 100, 1)
                     
-                    total_recorded_so_far = attended_count + tardy_count + absent_count
+                    total_recorded_so_far = attended_count + tardy_count + absent_count_db
                     unrecorded_count = total_classes_so_far - total_recorded_so_far
                     if unrecorded_count < 0: unrecorded_count = 0
+                        
+                    total_absent = absent_count_db + unrecorded_count
                     
                     summary.append({
                         'id': student.学生ID, 'name': student.学生名,
@@ -1910,6 +1919,7 @@ def report_summary():
                         'counts': {
                             '出席': attended_count, '遅刻': tardy_count,
                             '欠席': absent_count, 'その他': unrecorded_count
+                            'その他': 0              # 4. 「その他」は 0 にする
                         }
                     })
                 report_data = summary
@@ -2592,109 +2602,8 @@ def student_logout():
     logout_user()
     flash("ログアウトしました。", "success")
     return redirect(url_for('student_login'))
+    
 # --- 12. 実行 ---
-
-from datetime import time # ⬅️ timeもimportしておく
-
-@app.cli.command('fill-absences')
-def fill_absences_command():
-    """ (バッチ処理) 昨日、出席記録がなかった学生を「欠席」としてDBに書き込む """
-    
-    # --- 1. 「昨日」の日付を計算 ---
-    # (Renderサーバーは世界標準時(UTC)で動いているので、日本時間(JST)の「昨日」を計算)
-    JST = timedelta(hours=9)
-    yesterday_jst = datetime.now() + JST - timedelta(days=1)
-    yesterday_date_obj = yesterday_jst.date()
-    yesterday_str = yesterday_jst.strftime('%Y/%m/%d')
-    
-    print(f"【バッチ処理開始】対象日: {yesterday_str}")
-
-    # --- 2. 昨日の「授業計画」を確認 ---
-    plan = 授業計画.query.filter_by(日付=yesterday_str).first()
-    
-    if not plan:
-        print(f"【情報】{yesterday_str} は授業計画にない日(休日)です。処理を終了します。")
-        return
-
-    # --- 3. 昨日の「時間割」を取得 ---
-    kiki = str(plan.期)
-    yobi_code = plan.授業曜日
-    yobi_str = YOBI_MAP_REVERSE.get(yobi_code) #
-    
-    if not yobi_str:
-        print(f"【エラー】曜日コード {yobi_code} は無効です。")
-        return
-
-    # 昨日の学期・曜日に該当する「授業ID」と「時限」をすべて取得
-    schedule_slots = db.session.query(
-        時間割.授業ID, 時間割.時限
-    ).filter(
-        時間割.学期 == kiki, 
-        時間割.曜日 == yobi_str,
-        時間割.授業ID != 0  # 授業IDが0 (空きコマ) ではないもの
-    ).all()
-
-    if not schedule_slots:
-        print(f"【情報】{yesterday_str} ({yobi_str}) には授業がありません。")
-        return
-
-    # --- 4. 全学生のIDリストを取得 ---
-    all_student_ids_tuples = db.session.query(学生.学生ID).all()
-    all_student_ids = {s[0] for s in all_student_ids_tuples} # 処理しやすいようにSet型に変換
-    
-    new_absences_count = 0
-    
-    # --- 5. 昨日のコマごとに、記録がない学生を洗い出す ---
-    for class_id, jigen in schedule_slots:
-        
-        # 5a. 「昨日・その授業・その時限」に、既に記録がある学生リスト(Set)を作成
-        existing_records = db.session.query(
-            出席記録.学生ID
-        ).filter(
-            出席記録.授業ID == class_id,
-            出席記録.時限 == jigen,
-            出席記録.出席日付 == yesterday_date_obj
-        ).all()
-        existing_student_set = {r[0] for r in existing_records}
-
-        # 5b. 全学生リストから、記録がある学生リストを引き算
-        missing_student_ids = all_student_ids - existing_student_set
-        
-        if not missing_student_ids:
-            continue # このコマは全員記録があったのでスキップ
-
-        # 5c. 記録がなかった学生＝「欠席」としてDBに登録
-        
-        # 欠席記録の時刻（出席時刻）として、その授業の開始時刻を使う
-        time_row = TimeTable.query.get(jigen) #
-        class_start_time = time_row.開始時刻 if time_row else time(8, 50) # (もし時刻表がなければ8:50)
-        
-        # 日付と時刻を合成
-        fake_timestamp = datetime.combine(yesterday_date_obj, class_start_time)
-
-        for student_id in missing_student_ids:
-            new_absence = 出席記録(
-                学生ID=student_id,
-                授業ID=class_id,
-                出席時刻=fake_timestamp, # 授業開始時刻
-                状態="欠席",              # ⬅️ 欠席として書き込む
-                時限=jigen,
-                出席日付=yesterday_date_obj # ⬅️ 出席日付は昨日
-            )
-            db.session.add(new_absence)
-            new_absences_count += 1
-
-    # --- 6. 最後にまとめてDBに保存 ---
-    if new_absences_count > 0:
-        try:
-            db.session.commit()
-            print(f"【成功】{new_absences_count} 件の欠席記録をDBに書き込みました。")
-        except Exception as e:
-            db.session.rollback()
-            print(f"【エラー】DB書き込みに失敗しました: {e}")
-    else:
-        print(f"【情報】欠席記録の書き込みはありませんでした（全員記録済み）。")
-
 if __name__ == "__main__":
     with app.app_context():
         pass
