@@ -1925,7 +1925,7 @@ def report_summary():
                         'total_classes_so_far': total_classes_so_far,
                         'counts': {
                             '出席': attended_count, '遅刻': tardy_count,
-                            '欠席': absent_count, 'その他': unrecorded_count
+                            '欠席': absent_count, 'その他': unrecorded_count,
                             'その他': 0              # 4. 「その他」は 0 にする
                         }
                     })
