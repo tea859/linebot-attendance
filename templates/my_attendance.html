@@ -41,7 +41,7 @@
                 <div class="border border-gray-200 p-4 rounded-lg hover:shadow-md transition duration-150">
                     <div class="flex justify-between items-center mb-2">
                         <h3 class="text-lg font-bold text-gray-800">{{ row.subject }}</h3>
-                        <span class="text-2xl font-extrabold {% if row.attendance_rate >= 80 %}text-green-600{% elif row.attendance_rate >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                        <span class="text-2xl font-extrabold {% if row.attendance_rate >= 80 %}text-green-600{% elif row.attendance_rate >= 50 %}text-red-600{% else %}text-red-600{% endif %}">
                             {{ row.attendance_rate }}%
                         </span>
                     </div>
@@ -57,7 +57,9 @@
                     </div>
 
                     <div class="flex justify-between text-sm text-gray-600">
-                        <span>総回数: <span class="font-bold">{{ row.total_classes }}</span></span>
+                        
+                        <span>今日までの回数: <span class="font-bold">{{ row.total_classes_so_far }}</span></span>
+                        
                         <span>出席: <span class="font-bold text-green-600">{{ row.attendance_count }}</span></span>
                         <span>遅刻: <span class="font-bold text-yellow-600">{{ row.tardy_count }}</span></span>
                         <span>欠席: <span class="font-bold text-red-600">{{ row.absent_count }}</span></span>
