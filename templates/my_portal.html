@@ -30,9 +30,18 @@
                         {% for row in report_data %}
                         <div class="border border-gray-200 p-4 rounded-lg">
                             <h3 class="text-lg font-bold text-gray-800">{{ row.subject }}</h3>
-                            <p>出席率: {{ row.attendance_rate }}%</p>
-                            <a href="{{ url_for('my_portal_detail', kiki=selected_kiki, subject=item.subject) }}" 
-                               class="text-blue-600 hover:text-blue-800">
+                            
+                            <p class="text-2xl font-extrabold {% if row.attendance_rate >= 80 %}text-green-600{% elif row.attendance_rate >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                {{ row.attendance_rate }}%
+                            </p>
+                            
+                            <div class="text-sm text-gray-600 mt-2">
+                                <span>今日までの回数: <span class="font-bold">{{ row.total_classes_so_far }}</span></span> |
+                                <span>出席: <span class="font-bold text-green-600">{{ row.attendance_count }}</span></span> |
+                                <span>遅刻: <span class="font-bold text-yellow-600">{{ row.tardy_count }}</span></span> |
+                                <span>欠席: <span class="font-bold text-red-600">{{ row.absent_count }}</span></span>
+                            </div>
+                            <a href="{{ url_for('my_portal_detail', kiki=selected_kiki, subject=row.subject) }}" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">
                                 詳細を見る
                             </a>
                         </div>
