@@ -1203,7 +1203,78 @@ def api_alerts_count():
 
 @app.route("/api/status")
 def api_status():
-    """(ダッシュボードAPI) リアルタイム在室状況を返す (ORM版)"""
+    """(ダッシュボードAPI) リアルタイム在室状況を返す + 自動出席チェック"""
+    
+    # 1. まず「在室中」の学生リストを取得 (学生ID, 教室名, 入室時刻, 備考)
+    active_sessions_data = db.session.query(
+        在室履歴.学生ID, 教室.教室名, 在室履歴.入室時刻, 在室履歴.備考 
+    ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
+     .filter(在室履歴.退室時刻 == None).all()
+    
+    # (在室中のIDだけSet型（高速な検索リスト）にしておく)
+    active_student_ids = {s[0] for s in active_sessions_data}
+
+    # --- ▼▼▼ 自動出席チェック機能 (ここから) ▼▼▼ ---
+    if active_student_ids: # (在室者がいる場合のみチェック)
+        try:
+            now = datetime.now()
+            today_str = f"{now.year}/{now.month}/{now.day}"
+            
+            # 2. 今が授業中か確認 (api_register_attendance から流用)
+            plan_row = 授業計画.query.get(today_str) #
+            if plan_row:
+                kiki, yobi_code = plan_row.期, plan_row.授業曜日
+                period_row = TimeTable.query.filter(
+                    TimeTable.開始時刻 <= now.time(),
+                    TimeTable.終了時刻 >= now.time()
+                ).first() #
+                
+                if period_row:
+                    current_period = period_row.時限
+                    yobi_str = YOBI_MAP_REVERSE.get(yobi_code) #
+                    class_row = 時間割.query.filter_by(
+                        学期=str(kiki), 曜日=yobi_str, 時限=current_period
+                    ).first() #
+                    
+                    if class_row and class_row.授業ID != 0:
+                        # 3. 授業中だった場合
+                        class_id = class_row.授業ID
+                        today_date = now.date()
+
+                        # 4.「今日・この時限・この授業」で「既に記録済み」の学生IDリストを取得
+                        #   (検索対象を「在室中の学生」だけに絞る)
+                        existing_records = db.session.query(出席記録.学生ID).filter(
+                            出席記録.学生ID.in_(active_student_ids), 
+                            出席記録.授業ID == class_id,
+                            出席記録.時限 == current_period,
+                            出席記録.出席日付 == today_date
+                        ).all()
+                        recorded_student_ids = {r[0] for r in existing_records}
+
+                        # 5.「在室中」なのに「未記録」の学生を特定
+                        students_to_mark = active_student_ids - recorded_student_ids
+                        
+                        new_records = []
+                        for student_id in students_to_mark:
+                            # (判定ロジック を使って、遅刻か出席かを自動判定)
+                            status = 判定(current_period, now) 
+                            
+                            new_records.append(出席記録(
+                                学生ID=student_id, 授業ID=class_id, 出席時刻=now,
+                                状態=status, 時限=current_period, 出席日付=today_date
+                            ))
+                        
+                        if new_records:
+                            db.session.add_all(new_records)
+                            db.session.commit()
+                            app.logger.info(f"【自動出席】{len(new_records)}件の記録を追加しました。")
+
+        except IntegrityError:
+            db.session.rollback() 
+            app.logger.warning("【自動出席エラー】IntegrityError、ロールバックしました。")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"【自動出席エラー】不明なエラー: {e}")
     
     all_students = 学生.query.all()
     
