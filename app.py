@@ -2439,21 +2439,28 @@ def my_portal():
 
             attendance_count = records_count.get('出席', 0)
             tardy_count = records_count.get('遅刻', 0)
-            absent_count = records_count.get('欠席', 0)
+            absent_count_db = records_count.get('欠席', 0) # ⬅️ DB上の欠席
 
             # 2c. 出席率を計算
             attendance_rate = 0.0
             if total_classes_so_far > 0:
                 attendance_rate = round((attendance_count / total_classes_so_far) * 100, 1)
             
-            # 2d. データをリストに追加 (my_portal.html が期待するデータ形式)
+            # 2d. 「未記録」を計算して「欠席」に合算
+            total_recorded = attendance_count + tardy_count + absent_count_db
+            unrecorded_count = total_classes_so_far - total_recorded
+            if unrecorded_count < 0: unrecorded_count = 0
+
+            total_absent = absent_count_db + unrecorded_count # ⬅️ 合算
+
+            # 2e. データをリストに追加
             report_data.append({
-                "subject": subject_name,  # 授業名
-                "attendance_rate": attendance_rate, # 出席率
-                "total_classes_so_far": total_classes_so_far, # 今日までのコマ数
-                "attendance_count": attendance_count, # 出席
-                "tardy_count": tardy_count, # 遅刻
-                "absent_count": absent_count # 欠席
+                "subject": subject_name,
+                "attendance_rate": attendance_rate,
+                "total_classes_so_far": total_classes_so_far, 
+                "attendance_count": attendance_count,
+                "tardy_count": tardy_count,
+                "absent_count": total_absent # ⬅️ 合算した値を渡す
             })
     
     # --- 2. 時間割データを取得 ---
