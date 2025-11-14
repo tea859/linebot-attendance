@@ -16,6 +16,7 @@
     </style>
 </head>
 <body class="bg-gray-100 p-8">
+    
     <div class="max-w-7xl mx-auto">
         <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-indigo-500 flex justify-between items-center">
             
@@ -42,52 +43,52 @@
             <div class="border border-gray-200 rounded-lg overflow-hidden">
                 <div class="detail-content p-4">
                     {% if max_count == 0 %}
-                        {% else %}
-                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                            {% for i in range(1, max_count + 1) %}
-                                {% set count_str = "count_" ~ i %}
-                                {% set record_id = row[count_str ~ "_id"] %}
-                                {% set status = row[count_str ~ "_status"] %}
-                                {% set display = row[count_str ~ "_display"] %}
-                                {% set original_status = row[count_str ~ "_original_status"] %}
-                                {% set is_phantom = row[count_str ~ "_is_phantom"] %}
+                        <p class="text-center text-gray-500 py-8">この授業の出席記録はまだありません。</p>
+                    {% else %}
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                        {% for i in range(1, max_count + 1) %}
+                            {% set count_str = "count_" ~ i %}
+                            {% set record_id = row[count_str ~ "_id"] %}
+                            {% set status = row[count_str ~ "_status"] %}
+                            {% set display = row[count_str ~ "_display"] %}
+                            {% set original_status = row[count_str ~ "_original_status"] %}
+                            {% set is_phantom = row[count_str ~ "_is_phantom"] %}
+                            {% set jigen = row[count_str ~ "_jigen"] %}
+                            
+                            {% if status != '-' %}
+                            <div class="text-center p-3 border rounded-lg
+                                {% if '○' in status %}bg-green-50 border-green-200
+                                {% elif '△' in status %}bg-yellow-50 border-yellow-200
+                                {% elif '×' in status %}bg-red-50 border-red-200
+                                {% else %}bg-gray-50 border-gray-200{% endif %}
                                 
-                                                                {% set jigen = row[count_str ~ "_jigen"] %}
-                                
-                                {% if status != '-' %}
-                                <div class="text-center p-3 border rounded-lg
-                                    {% if '○' in status %}bg-green-50 border-green-200
-                                    {% elif '△' in status %}bg-yellow-50 border-yellow-200
-                                    {% elif '×' in status %}bg-red-50 border-red-200
-                                    {% else %}bg-gray-50 border-gray-200{% endif %}
-                                    
-                                    {% if not is_phantom and not is_portal_view %}
-                                        cursor-pointer hover:shadow-lg transition"
-                                        onclick="openStatusModal('{{ record_id }}', '{{ original_status }}')
-                                    {% else %}
-                                        "
-                                    {% endif %}>
-                                   nbsp;                               
-                                    <p class="text-xs text-gray-500 mb-1">#{{ i }}</p>
-                                    <span class="status-mark 
-                                        {% if '○' in status %}status-o
-t                                       {% elif '△' in status %}status-t
-                                        {% elif '×' in status %}status-x
-m                                       {% else %}text-gray-600{% endif %}">
-                                        {{ status }}
-                                    </span>
+                                {% if not is_phantom and not is_portal_view %}
+                                    cursor-pointer hover:shadow-lg transition"
+                                    onclick="openStatusModal('{{ record_id }}', '{{ original_status }}')
+                                {% else %}
+                                    "
+                                {% endif %}>
                                 
-                                s                               <p class="text-xs text-gray-700 mt-1">
+                                <p class="text-xs text-gray-500 mb-1">#{{ i }}</p>
+                                <span class="status-mark 
+                                    {% if '○' in status %}status-o
+                                    {% elif '△' in status %}status-t
+                                    {% elif '×' in status %}status-x
+                                    {% else %}text-gray-600{% endif %}">
+                                    {{ status }}
+                                </span>
+                                
+                                <p class="text-xs text-gray-700 mt-1">
                                     {{ display.split('(')[1].split(')')[0] }} ({{ jigen }}限)
                                 </p>
                                 
-                                    {% if is_phantom %}
-                                    <p class="text-xs text-gray-400" style="font-size: 0.7em; margin-top: 2px;">(未記録)</p>
-                                    {% endif %}
-                                </div>
-s                             {% endif %}
-                            {% endfor %}
-                        </div>
+                                {% if is_phantom %}
+                                <p class="text-xs text-gray-400" style="font-size: 0.7em; margin-top: 2px;">(未記録)</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
                     {% endif %}
                 </div>
             </div>
