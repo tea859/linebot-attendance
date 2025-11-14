@@ -70,8 +70,8 @@
                     </thead>
 		<tbody class="divide-y divide-gray-200">
 		    {% for student in report_data %}
-		    <tr class="{% if student.total_classes_so_far > 0 and student.attendance_rate < 80 %}bg-red-50 hover:bg-red-100{% endif %}">
-		        
+            
+    <tr class="{% if student.total_classes_so_far > 0 and student.attendance_rate < 80 %}bg-red-50 hover:bg-red-100{% else %}hover:bg-gray-50{% endif %}">
 		        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500" style="width: 7rem;">{{ student.id }}</td>
 		        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ student.name }}</td>
 		        
@@ -89,7 +89,7 @@
 		        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-red-600">{{ student.counts.欠席 }}</td>
 		        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ student.counts.その他 }}</td>
 		    </tr>
-		    {% endfor %}
+            {% endfor %}
 		</tbody>
                 </table>
             </div>
