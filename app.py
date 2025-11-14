@@ -1753,7 +1753,7 @@ def my_attendance():
 @app.route("/my_attendance_detail", methods=["GET"])
 @login_required 
 def my_attendance_detail():
-    """(レポート) 個人別出席詳細 (text()版)"""
+    """(レポート) 個人別出席詳細 (未記録も「欠席」として表示)"""
     student_id = request.args.get("student_id")
     selected_kiki = request.args.get("kiki", "1")
     subject_name_filter = request.args.get("subject")
@@ -1764,72 +1764,155 @@ def my_attendance_detail():
     
     student_info = 学生.query.get(student_id)
     student_name = student_info.学生名 if student_info else "不明な学生"
+    
+    if not subject_name_filter:
+        flash("詳細を表示する授業が指定されていません。", "error")
+        return redirect(url_for('my_attendance', student_id=student_id, kiki=selected_kiki))
 
-    # PostgreSQL/SQLite両方でROWIDの代わりにPK(ID)を使う
+    kiki_int = int(selected_kiki)
+
+    # 1. 授業名から授業IDを取得
+    subject_obj = 授業.query.filter_by(授業科目名=subject_name_filter).first()
+    if not subject_obj:
+        flash(f"授業「{subject_name_filter}」が見つかりません。", "error")
+        return redirect(url_for('my_attendance', student_id=student_id, kiki=selected_kiki))
+    subject_id = subject_obj.授業ID
+
+    # 2. (リスト1) DBに「実在する」出席記録を取得 (「時限」も取得)
     sql_records = text("""
-        SELECT R."ID", R."出席時刻", R."状態", S."授業科目名"
+        SELECT R."ID", R."出席時刻", R."状態", R."出席日付", R."時限"
         FROM "出席記録" R
-        JOIN "授業" S ON R."授業ID" = S."授業ID"
-        WHERE R."学生ID" = :sid AND R."授業ID" IN (
-            SELECT DISTINCT T."授業ID" FROM "時間割" T WHERE T."学期" = :kiki
-        )
-        ORDER BY S."授業科目名", R."出席時刻"
+        JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+        WHERE R."学生ID" = :sid 
+          AND R."授業ID" = :subject_id
+          AND P."期" = :kiki_int
+        ORDER BY R."出席日付", R."時限"
     """)
-    records = db.session.execute(sql_records, {"sid": student_id, "kiki": selected_kiki}).fetchall()
+    actual_records_raw = db.session.execute(sql_records, {
+        "sid": student_id, 
+        "subject_id": subject_id,
+        "kiki_int": kiki_int
+    }).fetchall()
     
-    grouped_attendance = OrderedDict()
-    status_map = {"出席": "○", "遅刻": "△", "欠席": "×"}
-    max_recorded_count = 0
+    # (記録済みの「(日付, 時限)」のタプルをSet型に保存)
+    actual_tuples = {(record.出席日付.date(), record.時限) for record in actual_records_raw}
 
-    for record_id, timestamp, status, subject_name in records:
-        if subject_name not in grouped_attendance:
-            grouped_attendance[subject_name] = {"records": []}
+    # 3. (リスト2) この授業があった「昨日までの全日程・全時限」を取得
+    
+    # 3a. この授業の「曜日」と「時限」のペアを取得 (例: [('月', 1), ('月', 2), ('水', 1)])
+    sql_schedule_slots = text("""
+        SELECT T."曜日", T."時限" 
+        FROM "時間割" T 
+        WHERE T."授業ID" = :sid AND T."学期" = :kiki AND T."授業ID" != 0
+    """)
+    schedule_slots = db.session.execute(sql_schedule_slots, {"sid": subject_id, "kiki": selected_kiki}).fetchall()
+    # (検索しやすいように 曜日 -> [時限リスト] の辞書に変換)
+    schedule_map = {}
+    for yobi, jigen in schedule_slots:
+        if yobi not in schedule_map:
+            schedule_map[yobi] = []
+        schedule_map[yobi].append(jigen)
+
+    # 3b. 授業計画から「昨日まで」の「日付」と「曜日コード」を取得
+    planned_days_raw = []
+    if schedule_map: # (スケジュールがある場合のみ)
+        sql_planned_dates = text("""
+            SELECT "日付", "授業曜日" 
+            FROM "授業計画" 
+            WHERE "期" = :kiki_int 
+              AND "授業曜日" IN :day_codes
+              AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+        """)
+        day_codes = [YOBI_MAP.get(name) for name in schedule_map.keys()] #
+        planned_days_raw = db.session.execute(sql_planned_dates, {
+            "kiki_int": kiki_int,
+            "day_codes": tuple(day_codes)
+        }).fetchall()
+
+    # 4. (合体処理) 2つのリストを合体させる
+    merged_report_list = []
+    
+    # 4a. まず「実在する記録」を全部入れる
+    for record in actual_records_raw:
+        merged_report_list.append({
+            "record_id": record.ID,
+            "timestamp": record.出席時刻, # datetimeオブジェクト
+            "status": record.状態,
+            "jigen": record.時限, # ⬅️ 時限を追加
+            "is_phantom": False # 「幽霊」ではない (実在する)
+        })
         
-        # timestamp は datetime オブジェクトのはず
-        date_part = timestamp.strftime('%Y-%m-%d')
-        display_status = status_map.get(status, status) 
-        grouped_attendance[subject_name]["records"].append(
-            (record_id, display_status, date_part, status) 
-        )
-        max_recorded_count = max(max_recorded_count, len(grouped_attendance[subject_name]["records"]))
+    # 4b. 次に「授業があった日」をチェック
+    for date_row in planned_days_raw:
+        try:
+            planned_date = datetime.strptime(date_row[0], '%Y/%m/%d').date()
+            yobi_code = date_row.授業曜日
+            yobi_name = YOBI_MAP_REVERSE.get(yobi_code) #
+        except (ValueError, TypeError):
+            continue # 日付形式エラーや曜日不正はスキップ
             
-    report_data_detail = []
-    
-    if subject_name_filter and subject_name_filter not in grouped_attendance:
-        report_data_detail.append({"subject": subject_name_filter})
-        max_recorded_count = 0 
-    
-    for subject, data in grouped_attendance.items():
-        if subject_name_filter and subject != subject_name_filter:
+        # (その曜日に予定されていた時限リストを取得)
+        periods_for_this_day = schedule_map.get(yobi_name)
+        if not periods_for_this_day:
             continue
-        row = {"subject": subject}
+            
+        # (その日の時限を1つずつチェック)
+        for jigen in periods_for_this_day:
+            current_tuple = (planned_date, jigen)
+            
+            # (もし「授業があった(日, 時限)」が「記録済みリスト」になかったら)
+            if current_tuple not in actual_tuples:
+                # ＝ これが「未記録＝欠席」だ！
+                
+                # (ダミーの「×」データを作る)
+                fake_timestamp = datetime.combine(planned_date, time(8, 50))
+                
+                merged_report_list.append({
+                    "record_id": None,
+                    "timestamp": fake_timestamp, 
+                    "status": "欠席",
+                    "jigen": jigen, # ⬅️ 時限を追加
+                    "is_phantom": True
+                })
+            
+    # 4c. 最終リストを日付順・時限順に並び替え
+    merged_report_list.sort(key=lambda x: (x["timestamp"], x["jigen"]))
+
+    # 5. データをHTMLで使いやすいように「仕分け」する
+    report_data_detail = []
+    status_map = {"出席": "○", "遅刻": "△", "欠席": "×"}
+    
+    if merged_report_list:
+        row = {"subject": subject_name_filter}
+        max_recorded_count = len(merged_report_list)
         
         for i in range(max_recorded_count):
             count_str = str(i + 1) 
-            if i < len(data["records"]):
-                record_id, status_symbol, date, original_status = data["records"][i]
-                try:
-                    formatted_date = datetime.strptime(date, '%Y-%m-%d').strftime('%m.%d')
-                except ValueError:
-                    formatted_date = date
-                
-                row[f"count_{count_str}_id"] = record_id
-                row[f"count_{count_str}_status"] = status_symbol 
-                row[f"count_{count_str}_display"] = f"{status_symbol} ({formatted_date})" 
-                row[f"count_{count_str}_original_status"] = original_status
-            else:
-                row[f"count_{count_str}_id"] = None
-                row[f"count_{count_str}_status"] = '-'
-                row[f"count_{count_str}_display"] = '-'
-                row[f"count_{count_str}_original_status"] = None
+            item = merged_report_list[i]
             
-        report_data_detail.append(row)
+            formatted_date = item["timestamp"].strftime('%m/%d') 
+            status_symbol = status_map.get(item["status"], item["status"])
+            
+            row[f"count_{count_str}_id"] = item["record_id"] if not item["is_phantom"] else f"phantom-{i}"
+            row[f"count_{count_str}_status"] = status_symbol
+            row[f"count_{count_str}_display"] = f"{status_symbol} ({formatted_date})"
+            row[f"count_{count_str}_original_status"] = item["status"]
+            row[f"count_{count_str}_is_phantom"] = item["is_phantom"]
+            row[f"count_{count_str}_jigen"] = item["jigen"] # ⬅️ 時限をHTMLへ
         
+        report_data_detail.append(row)
+    else:
+        max_recorded_count = 0 
+        report_data_detail.append({"subject": subject_name_filter})
+
+    # 6. HTMLテンプレートにデータを渡す
     return render_template("my_attendance_detail.html", 
                            student_id=student_id, student_name=student_name,
                            report_data=report_data_detail, max_count=max_recorded_count,
                            selected_kiki=selected_kiki, kikis=["1", "2", "3", "4"],
-                           subject_filter=subject_name_filter)
+                           subject_filter=subject_name_filter,
+                           is_portal_view=False 
+                           )
 
 @app.route("/report_summary", methods=["GET"])
 @login_required
@@ -2520,86 +2603,145 @@ def my_portal():
                            )
 
 
-#
-# /my_portal の関数の下あたりに追加
-#
-
 @app.route("/my_portal_detail")
-@login_required # 1. ログイン必須の「鍵」
+@login_required #
 def my_portal_detail():
-    """ (新機能) 学生専用ポータル - 出席詳細 """
+    """ (新機能) 学生専用ポータル - 出席詳細 (未記録も「欠席」として表示) """
 
-    # 2. 「学生」じゃなければ追い出す門番
     if not current_user.get_id().startswith('student-'):
         flash("管理者はこのページにアクセスできません。", "error")
         return redirect(url_for('index'))
     
-    # 3. ログイン中の「自分」の情報を取得
+    # --- ▼▼▼ 修正点1: IDを自分自身に固定 ▼▼▼ ---
     student_id = current_user.学生ID
     student_name = current_user.学生名
     
-    # 4. URLから「どの授業」か、「どの学期」かを受け取る
     selected_kiki = request.args.get("kiki", "1")
     subject_name_filter = request.args.get("subject")
 
     if not subject_name_filter:
-        # (もし?subject= が指定されていなければ)
         flash("詳細を表示する授業が指定されていません。", "error")
         return redirect(url_for('my_portal'))
 
-    # 5. DBから「自分の」「指定された授業」の記録だけを引っこ抜くSQL
-    #    (管理者用の /my_attendance_detail とほぼ同じ)
-    sql_records = text("""
-        SELECT R."ID", R."出席時刻", R."状態", S."授業科目名"
-        FROM "出席記録" R
-        JOIN "授業" S ON R."授業ID" = S."授業ID"
-        WHERE R."学生ID" = :sid 
-          AND S."授業科目名" = :subject_name
-          AND R."授業ID" IN (
-            SELECT DISTINCT T."授業ID" FROM "時間割" T WHERE T."学期" = :kiki
-          )
-        ORDER BY R."出席時刻"
-    """)
+    kiki_int = int(selected_kiki)
+
+    # --- ▼▼▼ (ここから /my_attendance_detail と全く同じロジック) ▼▼▼ ---
     
-    # 6. SQLを実行する
-    records = db.session.execute(sql_records, {
-        "sid": student_id,                 # ⬅️ 強制的に「自分」のID
-        "subject_name": subject_name_filter, # ⬅️ URLで指定された授業名
-        "kiki": selected_kiki              # ⬅️ URLで指定された学期
+    # 1. 授業名から授業IDを取得
+    subject_obj = 授業.query.filter_by(授業科目名=subject_name_filter).first()
+    if not subject_obj:
+        flash(f"授業「{subject_name_filter}」が見つかりません。", "error")
+        return redirect(url_for('my_portal'))
+    subject_id = subject_obj.授業ID
+
+    # 2. (リスト1) DBに「実在する」出席記録を取得 (「時限」も取得)
+    sql_records = text("""
+        SELECT R."ID", R."出席時刻", R."状態", R."出席日付", R."時限"
+        FROM "出席記録" R
+        JOIN "授業計画" P ON R."出席日付" = TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD')
+        WHERE R."学生ID" = :sid 
+          AND R."授業ID" = :subject_id
+          AND P."期" = :kiki_int
+        ORDER BY R."出席日付", R."時限"
+    """)
+    actual_records_raw = db.session.execute(sql_records, {
+        "sid": student_id, # ⬅️ (自分のIDが使われる)
+        "subject_id": subject_id,
+        "kiki_int": kiki_int
     }).fetchall()
     
-    # 7. データをHTMLで使いやすいように「仕分け」する
+    actual_tuples = {(record.出席日付.date(), record.時限) for record in actual_records_raw}
+
+    # 3. (リスト2) この授業があった「昨日までの全日程・全時限」を取得
+    sql_schedule_slots = text("""
+        SELECT T."曜日", T."時限" 
+        FROM "時間割" T 
+        WHERE T."授業ID" = :sid AND T."学期" = :kiki AND T."授業ID" != 0
+    """)
+    schedule_slots = db.session.execute(sql_schedule_slots, {"sid": subject_id, "kiki": selected_kiki}).fetchall()
+    schedule_map = {}
+    for yobi, jigen in schedule_slots:
+        if yobi not in schedule_map:
+            schedule_map[yobi] = []
+        schedule_map[yobi].append(jigen)
+
+    planned_days_raw = []
+    if schedule_map:
+        sql_planned_dates = text("""
+            SELECT "日付", "授業曜日" 
+            FROM "授業計画" 
+            WHERE "期" = :kiki_int 
+              AND "授業曜日" IN :day_codes
+              AND TO_DATE(REPLACE("日付", '/', '-'), 'YYYY-MM-DD') <= CURRENT_DATE
+        """)
+        day_codes = [YOBI_MAP.get(name) for name in schedule_map.keys()]
+        planned_days_raw = db.session.execute(sql_planned_dates, {
+            "kiki_int": kiki_int,
+            "day_codes": tuple(day_codes)
+        }).fetchall()
+
+    # 4. (合体処理) 2つのリストを合体させる
+    merged_report_list = []
+    
+    for record in actual_records_raw:
+        merged_report_list.append({
+            "record_id": record.ID, "timestamp": record.出席時刻,
+            "status": record.状態, "jigen": record.時限, "is_phantom": False
+        })
+        
+    for date_row in planned_days_raw:
+        try:
+            planned_date = datetime.strptime(date_row[0], '%Y/%m/%d').date()
+            yobi_code = date_row.授業曜日
+            yobi_name = YOBI_MAP_REVERSE.get(yobi_code)
+        except (ValueError, TypeError):
+            continue
+            
+        periods_for_this_day = schedule_map.get(yobi_name)
+        if not periods_for_this_day:
+            continue
+            
+        for jigen in periods_for_this_day:
+            current_tuple = (planned_date, jigen)
+            if current_tuple not in actual_tuples:
+                fake_timestamp = datetime.combine(planned_date, time(8, 50))
+                merged_report_list.append({
+                    "record_id": None, "timestamp": fake_timestamp, 
+                    "status": "欠席", "jigen": jigen, "is_phantom": True
+                })
+            
+    merged_report_list.sort(key=lambda x: (x["timestamp"], x["jigen"]))
+
+    # 5. データをHTMLで使いやすいように「仕分け」する
     report_data_detail = []
     status_map = {"出席": "○", "遅刻": "△", "欠席": "×"}
     
-    if records:
-        # 記録があった場合
-        row = {"subject": subject_name_filter} # 授業名で見出しを作る
-        max_recorded_count = len(records)
+    if merged_report_list:
+        row = {"subject": subject_name_filter}
+        max_recorded_count = len(merged_report_list)
         
         for i in range(max_recorded_count):
             count_str = str(i + 1) 
-            record_id, timestamp, status, _ = records[i]
+            item = merged_report_list[i]
             
-            # 日付を "11/13" の形にする
-            formatted_date = timestamp.strftime('%m/%d') 
-            status_symbol = status_map.get(status, status)
+            formatted_date = item["timestamp"].strftime('%m/%d') 
+            status_symbol = status_map.get(item["status"], item["status"])
             
-            # HTML側で "count_1_display" や "count_2_display" として使えるようにする
-            row[f"count_{count_str}_id"] = record_id
+            row[f"count_{count_str}_id"] = item["record_id"] if not item["is_phantom"] else f"phantom-{i}"
             row[f"count_{count_str}_status"] = status_symbol
             row[f"count_{count_str}_display"] = f"{status_symbol} ({formatted_date})"
-            row[f"count_{count_str}_original_status"] = status
+            row[f"count_{count_str}_original_status"] = item["status"]
+            row[f"count_{count_str}_is_phantom"] = item["is_phantom"]
+            row[f"count_{count_str}_jigen"] = item["jigen"] # ⬅️ 時限をHTMLへ
         
         report_data_detail.append(row)
-        
     else:
-        # 記録が0件だった場合（ありえないはずだが、念のため）
-        max_recorded_count = 0
+        max_recorded_count = 0 
         report_data_detail.append({"subject": subject_name_filter})
 
-    # 8. HTMLテンプレートにデータを渡して表示！
-    # (my_attendance_detail.html を使い回す)
+    # --- ▲▲▲ (ロジックはここまで同じ) ▲▲▲ ---
+
+    # 6. HTMLテンプレートにデータを渡す
     return render_template("my_attendance_detail.html", 
                            student_id=student_id, 
                            student_name=student_name,
@@ -2608,10 +2750,10 @@ def my_portal_detail():
                            selected_kiki=selected_kiki, 
                            kikis=["1", "2", "3", "4"],
                            subject_filter=subject_name_filter,
-                           # 9. ポータルに戻るためのフラグを追加
+                           # --- ▼▼▼ 修正点2: ポータルビューフラグをTrueに ▼▼▼ ---
                            is_portal_view=True 
                            )
-
+    
 @app.route("/student_logout")
 @login_required
 def student_logout():
