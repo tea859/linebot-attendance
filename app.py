@@ -276,6 +276,85 @@ class ReportRecord(db.Model):
     
     student = relationship("学生") # 学生情報を参照
 
+# --- ▼▼▼ 修正: デバッグ用ログ付きアラート関数 ▼▼▼ ---
+def check_and_send_alert(student_id, subject_id):
+    print(f"🔍 [DEBUG] アラート判定開始: 学生ID={student_id}, 授業ID={subject_id}")
+
+    try:
+        student = 学生.query.get(student_id)
+        subject = 授業.query.get(subject_id)
+        
+        if not student or not subject:
+            print("❌ [DEBUG] 学生または授業が見つかりません")
+            return
+
+        current_kiki = get_current_kiki()
+        kiki_int = int(current_kiki)
+
+        # --- 分母（総授業数）の計算 ---
+        sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
+        schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
+        
+        total_so_far = 0
+        for day_name, count in schedule_data:
+            day_code = YOBI_MAP.get(day_name)
+            if day_code is not None:
+                sql_plan = text('SELECT COUNT(*) FROM "授業計画" WHERE "期"=:kiki AND "授業曜日"=:code AND TO_DATE(REPLACE("日付", \'/\', \'-\'), \'YYYY-MM-DD\') <= CURRENT_DATE')
+                days_count = db.session.execute(sql_plan, {"kiki": kiki_int, "code": day_code}).scalar()
+                total_so_far += (days_count * count)
+
+        print(f"📊 [DEBUG] 今日までの授業回数(分母): {total_so_far} 回")
+
+        if total_so_far == 0:
+            print("⚠️ [DEBUG] 授業回数が 0 なので中断します")
+            return
+
+        # --- 分子（出席数）の計算 ---
+        sql_attend = text('SELECT COUNT(*) FROM "出席記録" WHERE "学生ID"=:sid AND "授業ID"=:subid AND "状態" IN (\'出席\', \'遅刻\', \'公欠\')')
+        attended_count = db.session.execute(sql_attend, {"sid": student_id, "subid": subject_id}).scalar()
+
+        # --- 出席率の計算 ---
+        rate = round((attended_count / total_so_far) * 100, 1)
+        print(f"🧮 [DEBUG] 出席数: {attended_count}, 出席率: {rate}%")
+
+        # --- 判定 ---
+        if rate < 80:
+            print("🚨 [DEBUG] 80%未満です！メール送信プロセスに入ります...")
+            
+            msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
+            msg_body = (
+                f"出席管理システムからの自動通知です。\n\n"
+                f"以下の学生の出席率が低下しています。\n"
+                f"--------------------------------\n"
+                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
+                f"授業名: {subject.授業科目名}\n"
+                f"現在の出席率: {rate}%\n"
+                f"(出席 {attended_count}回 / 実施 {total_so_far}回)\n"
+                f"--------------------------------\n"
+            )
+            
+            recipients = [app.config['MAIL_USERNAME']]
+            if student.parent_email:
+                recipients.append(student.parent_email)
+                print(f"✉️ [DEBUG] 保護者メアドあり: {student.parent_email}")
+            else:
+                print("ℹ️ [DEBUG] 保護者メアドなし (先生のみに送信)")
+
+            msg = Message(
+                subject=msg_subject,
+                sender=app.config['MAIL_USERNAME'],
+                recipients=recipients
+            )
+            msg.body = msg_body
+            
+            mail.send(msg)
+            print(f"✅ [SUCCESS] メール送信完了！")
+            
+        else:
+            print("🟢 [DEBUG] 出席率は80%以上なので、メールは送りません")
+
+    except Exception as e:
+        print(f"🔥 [ERROR] エラー発生: {e}")
 
 
 # ----------------------------------------------------------------------
@@ -2864,75 +2943,6 @@ def student_logout():
     logout_user()
     flash("ログアウトしました。", "success")
     return redirect(url_for('student_login'))
-
-def check_and_send_alert(student_id, subject_id):
-    """出席率が80%未満になったらメールで警告を送る"""
-    try:
-        # 1. 学生と授業の情報を取得
-        student = 学生.query.get(student_id)
-        subject = 授業.query.get(subject_id)
-        
-        if not student or not subject:
-            return
-
-        # 2. 学期情報の取得
-        current_kiki = get_current_kiki()
-        kiki_int = int(current_kiki)
-
-        # 3. 「今日までの総授業数」を計算
-        sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
-        schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
-        
-        total_so_far = 0
-        for day_name, count in schedule_data:
-            day_code = YOBI_MAP.get(day_name)
-            if day_code is not None:
-                sql_plan = text('SELECT COUNT(*) FROM "授業計画" WHERE "期"=:kiki AND "授業曜日"=:code AND TO_DATE(REPLACE("日付", \'/\', \'-\'), \'YYYY-MM-DD\') <= CURRENT_DATE')
-                days_count = db.session.execute(sql_plan, {"kiki": kiki_int, "code": day_code}).scalar()
-                total_so_far += (days_count * count)
-
-        if total_so_far == 0: return
-
-        # 4. 「出席・遅刻」の数をカウント (DB上の記録)
-        sql_attend = text('SELECT COUNT(*) FROM "出席記録" WHERE "学生ID"=:sid AND "授業ID"=:subid AND "状態" IN (\'出席\', \'遅刻\', \'公欠\')')
-        attended_count = db.session.execute(sql_attend, {"sid": student_id, "subid": subject_id}).scalar()
-
-        # 5. 出席率計算
-        rate = round((attended_count / total_so_far) * 100, 1)
-
-        # 6. 危険水域ならメール送信 (例: 80%未満)
-        if rate < 80:
-            # メールの件名と本文を作成
-            msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
-            msg_body = (
-                f"出席管理システムからの自動通知です。\n\n"
-                f"以下の学生の出席率が低下しています。\n"
-                f"--------------------------------\n"
-                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
-                f"授業名: {subject.授業科目名}\n"
-                f"現在の出席率: {rate}%\n"
-                f"(出席 {attended_count}回 / 実施 {total_so_far}回)\n"
-                f"--------------------------------\n"
-                f"※指導が必要な可能性があります。"
-            )
-            
-            recipients = [app.config['MAIL_USERNAME']] # まず先生を入れる
-            
-            if student.parent_email: # もし保護者のメアドが登録されていたら
-                recipients.append(student.parent_email) # 保護者も追加
-            
-            msg = Message(
-                subject=msg_subject,
-                sender=app.config['MAIL_USERNAME'],
-                recipients=recipients # ⬅️ ここにリストを渡す
-            )
-            msg.body = msg_body
-            
-            mail.send(msg)
-            print(f"【MAIL ALERT】{student.学生名} のアラートメールを送信しました (率: {rate}%)")
-
-    except Exception as e:
-        print(f"Alert Error: {e}")
 
 # --- 12. 実行 ---
 if __name__ == "__main__":
