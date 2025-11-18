@@ -164,7 +164,7 @@ class 学生(UserMixin, db.Model):
     
     # 🚨 新規追加: 学生用のパスワードハッシュを保存するカラム
     password_hash = db.Column(db.String(256), nullable=True) 
-
+    parent_email = db.Column(db.String(120), nullable=True)
     # (既存のリレーションシップ定義はそのまま)
     出席記録s = db.relationship('出席記録', back_populates='学生', cascade="all, delete-orphan")
     在室履歴s = db.relationship('在室履歴', back_populates='学生', cascade="all, delete-orphan")
@@ -2681,6 +2681,29 @@ def my_portal():
                            today_yobi=today_yobi
                            )
 
+@app.route("/update_parent_email", methods=["POST"])
+@login_required
+def update_parent_email():
+    """学生が自分の保護者メアドを更新する処理"""
+    
+    # 学生以外は弾く
+    if not current_user.get_id().startswith('student-'):
+        return redirect(url_for('index'))
+    
+    parent_email = request.form.get("parent_email")
+    
+    # データベースを更新
+    try:
+        # current_user はログイン中の学生データそのもの
+        student = 学生.query.get(current_user.学生ID)
+        student.parent_email = parent_email
+        db.session.commit()
+        flash("✅ 保護者のメールアドレスを保存しました。", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"❌ 保存に失敗しました: {e}", "error")
+        
+    return redirect(url_for('my_portal'))
 
 @app.route("/my_portal_detail")
 @login_required #
@@ -2841,24 +2864,21 @@ def student_logout():
     flash("ログアウトしました。", "success")
     return redirect(url_for('student_login'))
 
-# --- ▼▼▼ 新規追加: 出席率アラート関数 ▼▼▼ ---
 def check_and_send_alert(student_id, subject_id):
-    """出席率が80%未満になったらLINEで警告を送る"""
+    """出席率が80%未満になったらメールで警告を送る"""
     try:
-        # 1. LINE IDを取得 (紐付けがない場合は何もしない)
-        line_user = LineUser.query.filter_by(student_id=student_id).first()
-        if not line_user:
+        # 1. 学生と授業の情報を取得
+        student = 学生.query.get(student_id)
+        subject = 授業.query.get(subject_id)
+        
+        if not student or not subject:
             return
 
-        # 2. 授業名と学期を取得
-        subject = 授業.query.get(subject_id)
+        # 2. 学期情報の取得
         current_kiki = get_current_kiki()
         kiki_int = int(current_kiki)
-        
-        if not subject: return
 
-        # 3. 「今日までの総授業数」を計算 (既存ロジックの簡易版)
-        # (3a) この授業の「曜日」を取得
+        # 3. 「今日までの総授業数」を計算
         sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
         schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
         
@@ -2866,7 +2886,6 @@ def check_and_send_alert(student_id, subject_id):
         for day_name, count in schedule_data:
             day_code = YOBI_MAP.get(day_name)
             if day_code is not None:
-                # (3b) 授業計画から実施回数をカウント
                 sql_plan = text('SELECT COUNT(*) FROM "授業計画" WHERE "期"=:kiki AND "授業曜日"=:code AND TO_DATE(REPLACE("日付", \'/\', \'-\'), \'YYYY-MM-DD\') <= CURRENT_DATE')
                 days_count = db.session.execute(sql_plan, {"kiki": kiki_int, "code": day_code}).scalar()
                 total_so_far += (days_count * count)
@@ -2880,20 +2899,39 @@ def check_and_send_alert(student_id, subject_id):
         # 5. 出席率計算
         rate = round((attended_count / total_so_far) * 100, 1)
 
-        # 6. 危険水域ならLINE送信 (例: 80%未満)
+        # 6. 危険水域ならメール送信 (例: 80%未満)
         if rate < 80:
-            message = (
-                f"⚠️ 【出席率アラート】\n"
-                f"{subject.授業科目名} の出席率が {rate}% に低下しました。\n"
-                f"(出席 {attended_count} / 実施 {total_so_far})\n"
-                f"単位取得が危ぶまれます。次回は必ず出席してください！"
+            # メールの件名と本文を作成
+            msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
+            msg_body = (
+                f"出席管理システムからの自動通知です。\n\n"
+                f"以下の学生の出席率が低下しています。\n"
+                f"--------------------------------\n"
+                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
+                f"授業名: {subject.授業科目名}\n"
+                f"現在の出席率: {rate}%\n"
+                f"(出席 {attended_count}回 / 実施 {total_so_far}回)\n"
+                f"--------------------------------\n"
+                f"※指導が必要な可能性があります。"
             )
-            line_bot_api.push_message(line_user.line_user_id, TextSendMessage(text=message))
-            print(f"【ALERT】{student_id} に警告送信: {rate}%")
+            
+            recipients = [app.config['MAIL_USERNAME']] # まず先生を入れる
+            
+            if student.parent_email: # もし保護者のメアドが登録されていたら
+                recipients.append(student.parent_email) # 保護者も追加
+            
+            msg = Message(
+                subject=msg_subject,
+                sender=app.config['MAIL_USERNAME'],
+                recipients=recipients # ⬅️ ここにリストを渡す
+            )
+            msg.body = msg_body
+            
+            mail.send(msg)
+            print(f"【MAIL ALERT】{student.学生名} のアラートメールを送信しました (率: {rate}%)")
 
     except Exception as e:
         print(f"Alert Error: {e}")
-# --- ▲▲▲ 追加ここまで ▲▲▲ ---
 
 # --- 12. 実行 ---
 if __name__ == "__main__":
