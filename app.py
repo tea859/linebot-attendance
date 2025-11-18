@@ -1151,11 +1151,12 @@ def api_register_attendance():
             new_session = 在室履歴(学生ID=student_id, 教室ID=room_id, 入室時刻=now, 退室時刻=None)
             db.session.add(new_session)
             db.session.commit()
+            
+        check_and_send_alert(student_id, class_id)
         
         if status == "欠席":
             return jsonify({"success": True, "message": f"学生 {student_id} は「欠席」ですが、「在室」として記録しました。"}), 201
         else:
-            check_and_send_alert(student_id, class_id)
             return jsonify({"success": True, "message": f"学生 {student_id} を {status} として登録しました。"}), 201
 
     except Exception as e:
