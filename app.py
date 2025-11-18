@@ -1257,12 +1257,16 @@ def api_status():
                         
                         new_records = []
                         for student_id in students_to_mark:
-                            # (判定ロジック を使って、遅刻か出席かを自動判定)
+                            # (判定ロジックを使って、遅刻か出席かを自動判定)
                             status = 判定(current_period, now) 
                             
                             new_records.append(出席記録(
-                                学生ID=student_id, 授業ID=class_id, 出席時刻=now,
-                                状態=status, 時限=current_period, 出席日付=today_date
+                                学生ID=student_id, 
+                                授業ID=class_id, 
+                                出席時刻=now,
+                                状態=status, 
+                                時限=current_period
+                                # ⬅️ 出席日付は削除 (DBが勝手に計算してくれる)
                             ))
                         
                         if new_records:
