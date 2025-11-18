@@ -22,6 +22,25 @@
         </header>
 
         <main>
+            <div class="bg-white p-6 rounded-xl shadow-xl mb-8 border border-gray-200">
+                <h3 class="text-lg font-bold text-gray-700 mb-3">⚙️ 設定</h3>
+                
+                <form action="/update_parent_email" method="POST" class="flex flex-col sm:flex-row items-end gap-4">
+                    <div class="flex-grow w-full">
+                        <label for="parent_email" class="block text-sm font-medium text-gray-700 mb-1">
+                            保護者への通知先メールアドレス
+                        </label>
+                        <input type="email" name="parent_email" id="parent_email" 
+                               value="{{ current_user.parent_email or '' }}" 
+                               placeholder="example@gmail.com"
+                               class="w-full rounded-lg border-gray-300 border p-2 shadow-sm focus:border-green-500 focus:ring-green-500">
+                        <p class="text-xs text-gray-500 mt-1">※出席率が低下した際、このアドレスに通知が送られます。</p>
+                    </div>
+                    <button type="submit" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700 transition duration-150 whitespace-nowrap shadow-md">
+                        保存する
+                    </button>
+                </form>
+            </div>
             <h2 class="text-2xl font-bold text-gray-700 mb-4">あなたの出席サマリー (第{{ selected_kiki }}期)</h2>
             
             <div class="bg-white p-6 rounded-xl shadow-xl">
