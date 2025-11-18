@@ -1,6 +1,7 @@
 import os
 import io
 import csv
+import requests
 from dotenv import load_dotenv # ⬅️ これを追加
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime, timedelta, time
@@ -286,12 +287,11 @@ def check_and_send_alert(student_id, subject_id):
         subject = 授業.query.get(subject_id)
         
         if not student or not subject:
-            print("❌ [DEBUG] 学生または授業が見つかりません")
             return
 
         current_kiki = get_current_kiki()
         kiki_int = int(current_kiki)
-
+        
         # --- 分母（総授業数）の計算 ---
         sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
         schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
@@ -320,7 +320,7 @@ def check_and_send_alert(student_id, subject_id):
 
         # --- 判定 ---
         if rate < 80:
-            print("🚨 [DEBUG] 80%未満です！メール送信プロセスに入ります...")
+            print("🚨 [DEBUG] 80%未満です！GAS経由でメールを送ります...")
             
             msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
             msg_body = (
@@ -334,23 +334,35 @@ def check_and_send_alert(student_id, subject_id):
                 f"--------------------------------\n"
             )
             
-            recipients = [app.config['MAIL_USERNAME']]
+            # 宛先の作成（カンマ区切りの文字列にする）
+            recipients = [os.environ.get('MAIL_USERNAME')] # 管理者
             if student.parent_email:
                 recipients.append(student.parent_email)
-                print(f"✉️ [DEBUG] 保護者メアドあり: {student.parent_email}")
-            else:
-                print("ℹ️ [DEBUG] 保護者メアドなし (先生のみに送信)")
+            
+            recipients_str = ",".join(recipients)
 
-            msg = Message(
-                subject=msg_subject,
-                sender=app.config['MAIL_USERNAME'],
-                recipients=recipients
-            )
-            msg.body = msg_body
+            # GASに送るデータ
+            payload = {
+                "to": recipients_str,
+                "subject": msg_subject,
+                "body": msg_body,
+                "auth_token": os.environ.get('GAS_AUTH_TOKEN', 'YOUR_SECRET_GAS_TOKEN') # 環境変数から
+            }
             
-            mail.send(msg)
-            print(f"✅ [SUCCESS] メール送信完了！")
+            gas_url = os.environ.get('GAS_API_URL')
             
+            if gas_url:
+                # GASへPOST送信
+                response = requests.post(gas_url, json=payload)
+                print(f"GAS Response: {response.text}")
+                
+                if response.status_code == 200 and '"status":"success"' in response.text:
+                    print(f"✅ [SUCCESS] GAS経由でメール送信完了！")
+                else:
+                    print(f"🔥 [ERROR] GAS送信エラー: {response.text}")
+            else:
+                print("⚠️ [WARNING] GAS_API_URLが設定されていません")
+
         else:
             print("🟢 [DEBUG] 出席率は80%以上なので、メールは送りません")
 
@@ -2307,20 +2319,24 @@ def export_report_summary():
 @app.route("/send_schedule_email")
 @login_required
 def send_schedule_email_route():
-    """(メール送信) テストメールを送信"""
+    """(メール送信) GAS経由のテストメール"""
     try:
-        msg = Message(
-            subject="時間割情報のお知らせ（テスト）", 
-            sender=app.config['MAIL_USERNAME'], 
-            recipients=[app.config['MAIL_USERNAME']] # 宛先 (自分自身)
-        )
-        msg.body = "これは出席管理システムからのテストメールです。"
+        payload = {
+            "to": os.environ.get('MAIL_USERNAME'), # 自分宛て
+            "subject": "時間割情報のお知らせ（GASテスト）",
+            "body": "これはGAS経由のテストメールです。\nRenderから送信されています。",
+            "auth_token": os.environ.get('GAS_AUTH_TOKEN', 'YOUR_SECRET_GAS_TOKEN')
+        }
+        gas_url = os.environ.get('GAS_API_URL')
         
-        mail.send(msg) 
-        flash("✅ テストメールが正常に送信されました。", "success")
-        
+        if gas_url:
+            requests.post(gas_url, json=payload)
+            flash("✅ GAS経由でテストメールを送信しました。", "success")
+        else:
+            flash("❌ GAS_API_URLが設定されていません。", "error")
+            
     except Exception as e:
-        flash(f"❌ メールの送信中にエラーが発生しました: {e}", "error")
+        flash(f"❌ 送信エラー: {e}", "error")
         
     return redirect(url_for('index'))
 
