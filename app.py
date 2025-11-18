@@ -81,8 +81,9 @@ app.secret_key = os.environ.get('SECRET_KEY', 'default_fallback_key_if_not_set')
 
 # .env からメール設定を読み込む
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USE_SSL'] = True
+app.config['MAIL_PORT'] = 587  # 465 から 587 に変更
+app.config['MAIL_USE_TLS'] = True  # TLSを有効化
+app.config['MAIL_USE_SSL'] = False # SSLを無効化
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 mail = Mail(app)
