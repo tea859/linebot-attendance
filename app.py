@@ -1155,6 +1155,7 @@ def api_register_attendance():
         if status == "欠席":
             return jsonify({"success": True, "message": f"学生 {student_id} は「欠席」ですが、「在室」として記録しました。"}), 201
         else:
+            check_and_send_alert(student_id, class_id)
             return jsonify({"success": True, "message": f"学生 {student_id} を {status} として登録しました。"}), 201
 
     except Exception as e:
@@ -1268,6 +1269,9 @@ def api_status():
                             db.session.add_all(new_records)
                             db.session.commit()
                             app.logger.info(f"【自動出席】{len(new_records)}件の記録を追加しました。")
+                        
+                            for record in new_records:
+                                check_and_send_alert(record.学生ID, record.授業ID)
 
         except IntegrityError:
             db.session.rollback() 
@@ -2832,7 +2836,61 @@ def student_logout():
     logout_user()
     flash("ログアウトしました。", "success")
     return redirect(url_for('student_login'))
-    
+
+# --- ▼▼▼ 新規追加: 出席率アラート関数 ▼▼▼ ---
+def check_and_send_alert(student_id, subject_id):
+    """出席率が80%未満になったらLINEで警告を送る"""
+    try:
+        # 1. LINE IDを取得 (紐付けがない場合は何もしない)
+        line_user = LineUser.query.filter_by(student_id=student_id).first()
+        if not line_user:
+            return
+
+        # 2. 授業名と学期を取得
+        subject = 授業.query.get(subject_id)
+        current_kiki = get_current_kiki()
+        kiki_int = int(current_kiki)
+        
+        if not subject: return
+
+        # 3. 「今日までの総授業数」を計算 (既存ロジックの簡易版)
+        # (3a) この授業の「曜日」を取得
+        sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
+        schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
+        
+        total_so_far = 0
+        for day_name, count in schedule_data:
+            day_code = YOBI_MAP.get(day_name)
+            if day_code is not None:
+                # (3b) 授業計画から実施回数をカウント
+                sql_plan = text('SELECT COUNT(*) FROM "授業計画" WHERE "期"=:kiki AND "授業曜日"=:code AND TO_DATE(REPLACE("日付", \'/\', \'-\'), \'YYYY-MM-DD\') <= CURRENT_DATE')
+                days_count = db.session.execute(sql_plan, {"kiki": kiki_int, "code": day_code}).scalar()
+                total_so_far += (days_count * count)
+
+        if total_so_far == 0: return
+
+        # 4. 「出席・遅刻」の数をカウント (DB上の記録)
+        sql_attend = text('SELECT COUNT(*) FROM "出席記録" WHERE "学生ID"=:sid AND "授業ID"=:subid AND "状態" IN (\'出席\', \'遅刻\', \'公欠\')')
+        attended_count = db.session.execute(sql_attend, {"sid": student_id, "subid": subject_id}).scalar()
+
+        # 5. 出席率計算
+        rate = round((attended_count / total_so_far) * 100, 1)
+
+        # 6. 危険水域ならLINE送信 (例: 80%未満)
+        if rate < 80:
+            message = (
+                f"⚠️ 【出席率アラート】\n"
+                f"{subject.授業科目名} の出席率が {rate}% に低下しました。\n"
+                f"(出席 {attended_count} / 実施 {total_so_far})\n"
+                f"単位取得が危ぶまれます。次回は必ず出席してください！"
+            )
+            line_bot_api.push_message(line_user.line_user_id, TextSendMessage(text=message))
+            print(f"【ALERT】{student_id} に警告送信: {rate}%")
+
+    except Exception as e:
+        print(f"Alert Error: {e}")
+# --- ▲▲▲ 追加ここまで ▲▲▲ ---
+
 # --- 12. 実行 ---
 if __name__ == "__main__":
     with app.app_context():
