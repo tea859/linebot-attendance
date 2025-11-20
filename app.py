@@ -47,6 +47,8 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'captured_images'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
+
+auth_commands = {}
 # --- ▲ SQLAlchemy に変更 ▲ ---
 TEMP_EXIT_STATUS = "一時退出中"
 # デフォルト値を削除し、設定がない場合はNoneにする（またはエラーにする）
