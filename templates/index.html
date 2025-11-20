@@ -130,15 +130,6 @@
                 </span>
                 </a>
         {% endfor %}
-            
-            {% if current_user.is_authenticated %}
-            <a href="/send_schedule_email" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-red-500 flex flex-col items-center text-center hover:border-red-700">
-                <div class="text-4xl mb-3 text-red-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-2 4v7a2 2 0 01-2 2H7a2 2 0 01-2-2v-7"/></svg>
-                </div>
-                <span class="text-lg font-semibold text-gray-800">時間割メール送信</span>
-            </a>
-            {% endif %}
 
             {% if current_user.is_authenticated %}
             <a href="/report_summary" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center text-center hover:border-indigo-700">
