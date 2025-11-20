@@ -44,6 +44,9 @@ from sqlalchemy import Time as SQLTime, DateTime as SQLDateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
 app = Flask(__name__)
+UPLOAD_FOLDER = 'captured_images'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 # --- ▲ SQLAlchemy に変更 ▲ ---
 TEMP_EXIT_STATUS = "一時退出中"
 # デフォルト値を削除し、設定がない場合はNoneにする（またはエラーにする）
@@ -285,7 +288,31 @@ class ReportRecord(db.Model):
     
     student = relationship("学生") # 学生情報を参照
 
-# --- ▼▼▼ 修正: デバッグ用ログ付きアラート関数 ▼▼▼ ---
+def save_image(base64_data, student_id):
+    try:
+        # データURLスキームを取り除く (例: "data:image/jpeg;base64,..." の部分)
+        if "base64," in base64_data:
+            header, encoded = base64_data.split(",", 1)
+        else:
+            encoded = base64_data
+            
+        # 空白文字や改行が入っている場合があるので削除
+        encoded = encoded.strip()
+            
+        # Base64デコード
+        data = base64.b64decode(encoded)
+        
+        # ファイル名: YYYYMMDD_HHMMSS_学生ID.jpg
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{student_id}.jpg"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        with open(filepath, "wb") as f:
+            f.write(data)
+        return filename
+    except Exception as e:
+        print(f"画像保存エラー: {e}")
+        return None
+
 def check_and_send_alert(student_id, subject_id):
     print(f"🔍 [DEBUG] アラート判定開始: 学生ID={student_id}, 授業ID={subject_id}")
 
