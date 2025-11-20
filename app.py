@@ -2,6 +2,7 @@ import os
 import io
 import csv
 import requests
+import base64
 from dotenv import load_dotenv # ⬅️ これを追加
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime, timedelta, time
@@ -356,6 +357,85 @@ def check_and_send_alert(student_id, subject_id):
     except Exception as e:
         print(f" [ERROR] アラート処理エラー: {e}")
 
+@app.route("/api/portal_face_auth", methods=["POST"])
+@login_required  # 🚨 ログイン必須にする
+def api_portal_face_auth():
+    """ポータルからの顔認証出席登録"""
+    try:
+        # 1. 画像データの受け取り
+        data = request.get_json()
+        image_data = data.get("image")
+        
+        if not image_data:
+            return jsonify({"status": "error", "message": "画像データがありません"}), 400
+
+        # 2. ログイン中のユーザー情報を取得
+        student = current_user # Flask-Loginが自動で特定してくれる
+        student_id = student.学生ID
+
+        # --- ここに「顔認証ロジック」が入ります ---
+        # (今回は簡易的に「画像を保存して出席」としますが、
+        #  本来はここで saved_filename の画像と student_id の登録顔モデルを比較します)
+        
+        # 画像を保存（証拠として）
+        saved_filename = save_image(image_data, student_id)
+        print(f"📸 [Web認証] {student.学生名} (ID:{student_id}) の画像を保存: {saved_filename}")
+
+        # 3. 授業判定（前後20分のバッファを持たせる）
+        now = datetime.now()
+        target_period = None
+        
+        all_periods = TimeTable.query.all()
+        for p in all_periods:
+            p_start = datetime.combine(now.date(), p.開始時刻)
+            p_end = datetime.combine(now.date(), p.終了時刻)
+            
+            # 前後20分余裕を持たせる
+            if (p_start - timedelta(minutes=20)) <= now <= (p_end + timedelta(minutes=20)):
+                target_period = p.時限
+                break
+        
+        if not target_period:
+            return jsonify({"status": "error", "message": "現在は授業時間外です"}), 200
+
+        # 4. 重複チェック & 登録
+        existing = 出席記録.query.filter_by(
+            学生ID=student_id, 
+            授業ID=0, # まだ授業IDが特定できていない場合（本来は時間割から取得）
+            出席日付=now.date(), 
+            時限=target_period
+        ).first()
+        
+        # ※正確な授業IDを取得するロジック
+        # 今日の曜日・時限から授業を特定
+        today_yobi_str = YOBI_MAP_REVERSE.get((now.weekday() + 1) % 7)
+        kiki = get_current_kiki()
+        class_row = 時間割.query.filter_by(学期=kiki, 曜日=today_yobi_str, 時限=target_period).first()
+        subject_id = class_row.授業ID if class_row else 0
+        
+        if subject_id == 0:
+             return jsonify({"status": "error", "message": "この時間は授業がありません"}), 200
+
+        # 再チェック（授業ID込み）
+        existing = 出席記録.query.filter_by(学生ID=student_id, 授業ID=subject_id, 出席日付=now.date(), 時限=target_period).first()
+
+        if not existing:
+            new_attendance = 出席記録(
+                学生ID=student_id,
+                授業ID=subject_id,
+                出席時刻=now,
+                状態="出席", # 顔認証OKなら出席
+                時限=target_period
+            )
+            db.session.add(new_attendance)
+            db.session.commit()
+            return jsonify({"status": "success", "message": f"{target_period}限 ({class_row.授業.授業科目名}) の出席を受け付けました！"})
+        else:
+            return jsonify({"status": "info", "message": "既に出席済みです"})
+
+    except Exception as e:
+        print(f"Portal Auth Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # ----------------------------------------------------------------------
 # 5. データベースに挿入
