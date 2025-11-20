@@ -3156,6 +3156,18 @@ def api_check_remote_result():
     else:
         return jsonify({"status": "waiting"})
 
+@app.route('/api/upload_image', methods=['POST'])
+def upload_image():
+    student_id = request.form.get('student_id')
+    image_file = request.files['file']
+    
+    if image_file:
+        filename = os.path.join('uploaded_images', f"{student_id}_{image_file.filename}")
+        image_file.save(filename)
+        print(f"画像が保存されました: {filename}")
+        return 'Image uploaded successfully', 200
+    return 'No file uploaded', 400
+
 # --- 12. 実行 ---
 if __name__ == "__main__":
     with app.app_context():
