@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* 既存のスタイル */
+        /* 時間割テーブル用スタイル */
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
@@ -52,16 +52,6 @@
             text-align: center;
             vertical-align: middle;
             font-size: 0.9em;
-        }
-        
-        /* モーダルアニメーション */
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
-        .animate-pulse-red {
-            animation: pulse-red 2s infinite;
         }
     </style>
 </head>
@@ -129,6 +119,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="bg-white p-6 rounded-xl shadow-xl mb-8 border border-gray-200">
                 <h3 class="text-lg font-bold text-gray-700 mb-3">⚙️ 設定</h3>
                 
@@ -226,23 +217,6 @@
         </main>
     </div>
 
-    <div id="reAuthModal" class="hidden fixed inset-0 bg-red-600/90 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-md mx-4 w-full animate-pulse-red">
-            <div class="text-6xl text-red-500 mb-4"><i class="fas fa-exclamation-circle"></i></div>
-            <h2 class="text-3xl font-bold text-gray-800 mb-2">在席確認</h2>
-            <p class="text-gray-600 mb-6">
-                出席確認のため、カメラを見て<br>ボタンを押してください。
-            </p>
-            
-            <div class="text-5xl font-mono font-bold mb-8 text-red-600" id="countdown">60</div>
-            
-            <button onclick="captureAndAuth(true)" 
-                class="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xl shadow-lg transform transition hover:scale-105 active:scale-95">
-                <i class="fas fa-camera mr-2"></i> 今すぐ認証する
-            </button>
-            <p class="text-xs text-gray-400 mt-4">※時間内に押さないと欠席扱いになる場合があります</p>
-        </div>
-    </div>
     <script>
         // 1. 要素の取得
         const video = document.getElementById('userVideo');
@@ -254,6 +228,7 @@
         const clockEl = document.getElementById('clock');
 
         // 2. 時限設定 (開始時刻, 終了時刻)
+        // ※サーバーのTimeTableに合わせて調整してください
         const CLASS_TIMES = [
             { p: 1, start: "08:50", end: "10:30" },
             { p: 2, start: "10:35", end: "12:15" },
@@ -262,7 +237,7 @@
             { p: 5, start: "16:40", end: "18:20" }
         ];
 
-        // 時計更新
+        // 時計更新 & 時間チェック
         setInterval(() => {
             const now = new Date();
             clockEl.textContent = now.toLocaleTimeString('ja-JP');
@@ -277,6 +252,10 @@
                 statusDot.classList.remove('bg-gray-400');
                 statusDot.classList.add('bg-green-400', 'animate-pulse');
                 statusText.textContent = "カメラ稼働中";
+                
+                // 初回の時間チェック
+                checkTimeAndEnableButton();
+                
             } catch (err) {
                 console.error("カメラエラー:", err);
                 statusDot.classList.remove('bg-gray-400');
@@ -288,9 +267,6 @@
 
         // 4. 時間判定ロジック
         function checkTimeAndEnableButton() {
-            // 抜き打ちチェック中はボタン制御をスキップ
-            if (!document.getElementById('reAuthModal').classList.contains('hidden')) return;
-
             const now = new Date();
             const currentMins = now.getHours() * 60 + now.getMinutes();
             
@@ -311,11 +287,14 @@
             });
 
             if (isClassTime) {
-                if (authBtn.disabled && !authBtn.innerHTML.includes("送信中")) {
-                    authBtn.disabled = false;
-                    authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-700 shadow-lg transform hover:-translate-y-1 flex items-center justify-center space-x-2";
-                    authBtn.innerHTML = `<i class="fas fa-camera"></i><span>第${targetPeriod}限の出席を登録する</span>`;
+                // 既に送信中や完了状態ならボタンを書き換えない
+                if (authBtn.disabled && !authBtn.innerHTML.includes("時間外")) {
+                    return; 
                 }
+
+                authBtn.disabled = false;
+                authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-700 shadow-lg transform hover:-translate-y-1 flex items-center justify-center space-x-2";
+                authBtn.innerHTML = `<i class="fas fa-camera"></i><span>第${targetPeriod}限の出席を登録する</span>`;
             } else {
                 authBtn.disabled = true;
                 authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed shadow-none flex items-center justify-center space-x-2";
@@ -324,11 +303,9 @@
         }
 
         // 5. 撮影＆送信処理
-        function captureAndAuth(isReAuth = false) {
-            if (!isReAuth) {
-                authBtn.disabled = true;
-                authBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>送信中...</span>`;
-            }
+        function captureAndAuth() {
+            authBtn.disabled = true;
+            authBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>送信中...</span>`;
             resultMsg.className = "hidden";
 
             // 画像取得
@@ -347,79 +324,24 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success' || data.status === 'info') {
-                    
-                    if (isReAuth) {
-                        // 抜き打ちチェック成功時
-                        document.getElementById('reAuthModal').classList.add('hidden');
-                        alert("✅ 在席確認完了！ありがとうございます。");
-                        scheduleNextCheck(); 
-                    } else {
-                        // 通常出席成功時
-                        resultMsg.textContent = data.message;
-                        resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-green-100 text-green-700 border border-green-400 block";
-                        authBtn.innerHTML = `<i class="fas fa-check"></i><span>登録完了</span>`;
-                        
-                        // 初回登録成功後に、抜き打ちチェックタイマーを開始
-                        scheduleNextCheck();
-                    }
-
+                    // 成功時
+                    resultMsg.textContent = data.message;
+                    resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-green-100 text-green-700 border border-green-400 block";
+                    authBtn.innerHTML = `<i class="fas fa-check"></i><span>登録完了</span>`;
+                    authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-blue-500 cursor-default flex items-center justify-center space-x-2";
                 } else {
+                    // エラー時（授業外など）
                     throw new Error(data.message);
                 }
             })
             .catch(err => {
                 console.error(err);
-                if (isReAuth) {
-                    alert("通信エラー: " + err.message);
-                } else {
-                    resultMsg.textContent = "エラー: " + err.message;
-                    resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-red-100 text-red-700 border border-red-400 block";
-                    authBtn.disabled = false;
-                    authBtn.innerHTML = `<i class="fas fa-redo"></i><span>再試行する</span>`;
-                }
+                resultMsg.textContent = "エラー: " + err.message;
+                resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-red-100 text-red-700 border border-red-400 block";
+                authBtn.disabled = false;
+                authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg flex items-center justify-center space-x-2";
+                authBtn.innerHTML = `<i class="fas fa-redo"></i><span>再試行する</span>`;
             });
-        }
-
-        // 6. 抜き打ちチェック (ランダム在席確認)
-        let checkTimer = null;
-
-        function scheduleNextCheck() {
-            // 15分(900000ms) 〜 40分(2400000ms) のランダムな時間に発動
-            const randomInterval = Math.floor(Math.random() * (2400000 - 900000) + 900000);
-            console.log(`次の在席確認は ${Math.floor(randomInterval / 60000)} 分後です`);
-            
-            clearTimeout(checkTimer);
-            checkTimer = setTimeout(triggerReAuth, randomInterval);
-        }
-
-        function triggerReAuth() {
-            if (authBtn.disabled && authBtn.innerHTML.includes("時間外")) {
-                scheduleNextCheck();
-                return;
-            }
-
-            const modal = document.getElementById('reAuthModal');
-            const countdownEl = document.getElementById('countdown');
-            let timeLeft = 60;
-
-            modal.classList.remove('hidden');
-            
-            const timerInterval = setInterval(() => {
-                timeLeft--;
-                countdownEl.textContent = timeLeft;
-                
-                if (modal.classList.contains('hidden')) {
-                    clearInterval(timerInterval);
-                }
-
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    if (!modal.classList.contains('hidden')) {
-                        modal.classList.add('hidden');
-                        alert("⚠️ 在席確認への応答がありませんでした。");
-                    }
-                }
-            }, 1000);
         }
     </script>
 </body>
