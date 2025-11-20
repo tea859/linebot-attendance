@@ -3079,6 +3079,8 @@ def api_poll_command():
     return jsonify({"command": command})
 
 # ③ Python(PC) -> Server: 「認証成功したよ！」と報告 & 出席登録
+# app.py の api_report_remote_result をこれに書き換え
+
 @app.route("/api/report_remote_result", methods=["POST"])
 def api_report_remote_result():
     data = request.get_json()
@@ -3086,26 +3088,22 @@ def api_report_remote_result():
     result = data.get("result") # "SUCCESS"
     
     if result == "SUCCESS":
-        print(f"✅ [Python->Server] ID:{student_id} の認証成功報告を受信")
+        print(f"✅ [報告受信] ID:{student_id} 認証成功")
         
-        # --- ここで出席登録処理を行う ---
-        # (既存のロジックを流用してデータベースに登録します)
+        # --- 出席登録ロジック ---
         now = datetime.now()
-        
-        # 1. 今の時間の授業を探す
         target_period = None
+        
+        # 1. 今の時間の授業を探す (前後20分の余裕)
         all_periods = TimeTable.query.all()
         for p in all_periods:
             p_start = datetime.combine(now.date(), p.開始時刻)
             p_end = datetime.combine(now.date(), p.終了時刻)
-            # 前後20分の余裕を持たせる
             if (p_start - timedelta(minutes=20)) <= now <= (p_end + timedelta(minutes=20)):
                 target_period = p.時限
                 break
         
         if target_period:
-            # 2. 授業ID特定 & DB登録 (簡易実装)
-            # 本来はここで厳密な重複チェックを行いますが、今回は成功フラグを優先します
             today_yobi_str = YOBI_MAP_REVERSE.get((now.weekday() + 1) % 7)
             kiki = get_current_kiki()
             class_row = 時間割.query.filter_by(学期=kiki, 曜日=today_yobi_str, 時限=target_period).first()
@@ -3113,25 +3111,34 @@ def api_report_remote_result():
             if class_row:
                 subject_id = class_row.授業ID
                 
+                # ★★★ 修正ポイント: ここで遅刻・欠席を判定する ★★★
+                status = 判定(target_period, now)
+                
                 # 重複チェック
                 existing = 出席記録.query.filter_by(学生ID=student_id, 授業ID=subject_id, 出席日付=now.date(), 時限=target_period).first()
+                
                 if not existing:
                     new_attendance = 出席記録(
-                        学生ID=student_id, 授業ID=subject_id, 出席時刻=now, 状態="出席", 時限=target_period
+                        学生ID=student_id, 
+                        授業ID=subject_id, 
+                        出席時刻=now, 
+                        状態=status, # 👈 判定結果("遅刻"や"欠席")を入れる
+                        時限=target_period
                     )
                     db.session.add(new_attendance)
                     db.session.commit()
-                    print("   -> DBに出席を登録しました")
+                    
+                    # アラートが必要ならチェック
+                    check_and_send_alert(student_id, subject_id)
+                    
+                    print(f"   -> DBに「{status}」で登録しました")
                 else:
-                    # 在席確認として時刻更新
+                    # 既に登録済みなら、在席確認として時刻だけ更新（状態は変えない）
                     existing.出席時刻 = now
                     db.session.commit()
-                    print("   -> 出席時刻を更新しました")
 
-        # --- Web側に知らせるために結果を保存 ---
-        # "RESULT_学生ID" というキーで結果を置いておく
+        # Web側に完了を知らせるフラグをセット
         auth_commands[f"RESULT_{student_id}"] = "SUCCESS"
-        
         return jsonify({"status": "received"})
     
     return jsonify({"status": "ignored"})
