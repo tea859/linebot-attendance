@@ -289,10 +289,10 @@ def check_and_send_alert(student_id, subject_id):
         if not student or not subject:
             return
 
+        # --- 出席率計算ロジック (ここは元のままでOK) ---
         current_kiki = get_current_kiki()
         kiki_int = int(current_kiki)
         
-        # --- 分母（総授業数）の計算 ---
         sql_days = text('SELECT "曜日", COUNT("時限") FROM "時間割" WHERE "授業ID"=:sid AND "学期"=:kiki GROUP BY "曜日"')
         schedule_data = db.session.execute(sql_days, {"sid": subject_id, "kiki": current_kiki}).fetchall()
         
@@ -304,70 +304,51 @@ def check_and_send_alert(student_id, subject_id):
                 days_count = db.session.execute(sql_plan, {"kiki": kiki_int, "code": day_code}).scalar()
                 total_so_far += (days_count * count)
 
-        print(f"📊 [DEBUG] 今日までの授業回数(分母): {total_so_far} 回")
+        if total_so_far == 0: return
 
-        if total_so_far == 0:
-            print("⚠️ [DEBUG] 授業回数が 0 なので中断します")
-            return
-
-        # --- 分子（出席数）の計算 ---
         sql_attend = text('SELECT COUNT(*) FROM "出席記録" WHERE "学生ID"=:sid AND "授業ID"=:subid AND "状態" IN (\'出席\', \'遅刻\', \'公欠\')')
         attended_count = db.session.execute(sql_attend, {"sid": student_id, "subid": subject_id}).scalar()
 
-        # --- 出席率の計算 ---
         rate = round((attended_count / total_so_far) * 100, 1)
-        print(f"🧮 [DEBUG] 出席数: {attended_count}, 出席率: {rate}%")
+        # ----------------------------------------------
 
-        # --- 判定 ---
+        # ★ここから下を変更（GASへ送信依頼）★
         if rate < 80:
-            print("🚨 [DEBUG] 80%未満です！GAS経由でメールを送ります...")
+            print(f"🚨 [DEBUG] 出席率 {rate}% (80%未満) なので通知を送ります")
             
             msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
             msg_body = (
-                f"出席管理システムからの自動通知です。\n\n"
-                f"以下の学生の出席率が低下しています。\n"
+                f"出席管理システムからの自動通知\n"
                 f"--------------------------------\n"
-                f"学生名: {student.学生名} (ID: {student.学生ID})\n"
-                f"授業名: {subject.授業科目名}\n"
-                f"現在の出席率: {rate}%\n"
-                f"(出席 {attended_count}回 / 実施 {total_so_far}回)\n"
-                f"--------------------------------\n"
+                f"学生: {student.学生名}\n"
+                f"授業: {subject.授業科目名}\n"
+                f"出席率: {rate}% ({attended_count}/{total_so_far})\n"
+                f"--------------------------------"
             )
             
-            # 宛先の作成（カンマ区切りの文字列にする）
+            # 宛先リスト作成
             recipients = [os.environ.get('MAIL_USERNAME')] # 管理者
             if student.parent_email:
                 recipients.append(student.parent_email)
             
-            recipients_str = ",".join(recipients)
-
-            # GASに送るデータ
-            payload = {
-                "to": recipients_str,
-                "subject": msg_subject,
-                "body": msg_body,
-                "auth_token": os.environ.get('GAS_AUTH_TOKEN', 'YOUR_SECRET_GAS_TOKEN') # 環境変数から
-            }
-            
+            # GASにデータを投げる
             gas_url = os.environ.get('GAS_API_URL')
+            gas_token = os.environ.get('GAS_AUTH_TOKEN')
             
-            if gas_url:
-                # GASへPOST送信
-                response = requests.post(gas_url, json=payload)
-                print(f"GAS Response: {response.text}")
-                
-                if response.status_code == 200 and '"status":"success"' in response.text:
-                    print(f"✅ [SUCCESS] GAS経由でメール送信完了！")
-                else:
-                    print(f"🔥 [ERROR] GAS送信エラー: {response.text}")
+            if gas_url and gas_token:
+                payload = {
+                    "to": ",".join(recipients), # カンマ区切りで送る
+                    "subject": msg_subject,
+                    "body": msg_body,
+                    "auth_token": gas_token
+                }
+                requests.post(gas_url, json=payload)
+                print("✅ [SUCCESS] GASにメール送信を依頼しました")
             else:
-                print("⚠️ [WARNING] GAS_API_URLが設定されていません")
-
-        else:
-            print("🟢 [DEBUG] 出席率は80%以上なので、メールは送りません")
+                print("⚠️ [ERROR] GAS_API_URL または GAS_AUTH_TOKEN が設定されていません")
 
     except Exception as e:
-        print(f"🔥 [ERROR] エラー発生: {e}")
+        print(f"🔥 [ERROR] アラート処理エラー: {e}")
 
 
 # ----------------------------------------------------------------------
@@ -2339,6 +2320,42 @@ def send_schedule_email_route():
         flash(f"❌ 送信エラー: {e}", "error")
         
     return redirect(url_for('index'))
+
+# app.py の最後の方に追加
+@app.route("/test_alert_force")
+@login_required
+def test_alert_force():
+    """
+    強制的にアラートメール送信ロジックをテストするURL
+    (実際の出席率に関係なく、ロジックが通るか確認用)
+    """
+    # データベースにある最初の学生と授業を取得してテスト
+    student = 学生.query.first()
+    subject = 授業.query.filter(授業.授業ID != 0).first()
+    
+    if not student or not subject:
+        return "学生または授業データがないためテストできません。"
+
+    # ここで check_and_send_alert を呼び出す
+    # ※ 本来は出席率が低くないと送られませんが、
+    #    テストのために print文などでログを確認するか、
+    #    一時的に check_and_send_alert 内の「if rate < 80:」をコメントアウトして確認します。
+    
+    # もしくは、もっと単純にGAS送信部分だけをテストするならこれ↓
+    try:
+        gas_url = os.environ.get('GAS_API_URL')
+        gas_token = os.environ.get('GAS_AUTH_TOKEN')
+        
+        payload = {
+            "to": os.environ.get('MAIL_USERNAME'),
+            "subject": "🔔【テスト】出席率低下アラートのテスト通知",
+            "body": "これはテストです。このメールが届けば、RenderからGAS経由での通知機能は正常に動いています。",
+            "auth_token": gas_token
+        }
+        resp = requests.post(gas_url, json=payload)
+        return f"送信完了！GASからの応答: {resp.text}"
+    except Exception as e:
+        return f"エラー発生: {e}"
 
 @app.route("/alerts")
 @login_required
