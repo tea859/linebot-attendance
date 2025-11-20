@@ -54,6 +54,147 @@
                     </button>
                 </form>
             </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8 border-t-4 border-blue-500">
+    <h2 class="text-xl font-bold text-gray-700 mb-4">📸 カメラで出席登録</h2>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <div class="relative bg-black rounded-lg overflow-hidden shadow-inner aspect-video">
+            <video id="userVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+            <canvas id="userCanvas" class="hidden"></canvas>
+            
+            <div id="cameraStatus" class="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                カメラ待機中...
+            </div>
+        </div>
+
+        <div class="flex flex-col justify-center space-y-4">
+            <p class="text-sm text-gray-600">
+                授業開始の前後になると、ボタンが有効になります。<br>
+                カメラに顔を向けて「出席登録」を押してください。
+            </p>
+            
+            <button id="authButton" onclick="captureAndAuth()" disabled
+                class="w-full py-3 px-6 rounded-lg font-bold text-white transition duration-200
+                       bg-gray-400 cursor-not-allowed shadow-none">
+                🕒 授業時間外です
+            </button>
+            
+            <div id="resultMsg" class="hidden p-3 rounded-lg text-sm font-bold text-center"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video = document.getElementById('userVideo');
+    const canvas = document.getElementById('userCanvas');
+    const authBtn = document.getElementById('authButton');
+    const statusDiv = document.getElementById('cameraStatus');
+    const resultMsg = document.getElementById('resultMsg');
+
+    // 1. カメラ起動
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+        .then(stream => {
+            video.srcObject = stream;
+            statusDiv.textContent = "● 稼働中";
+            statusDiv.classList.add("text-green-400");
+            checkTimeAndEnableButton(); // カメラがついたら時間チェック開始
+        })
+        .catch(err => {
+            console.error(err);
+            statusDiv.textContent = "❌ カメラ許可が必要です";
+            statusDiv.classList.add("text-red-400");
+        });
+
+    // 2. 時間割データ（サーバーから渡された時限リストを使う）
+    // ※ app.py の my_portal ルートで periods データを渡す必要がありますが、
+    //   ここでは簡易的にJSで時間を判定します。
+    const CLASS_TIMES = [
+        { p: 1, start: "08:50", end: "10:30" },
+        { p: 2, start: "10:35", end: "12:15" },
+        { p: 3, start: "13:00", end: "14:40" },
+        { p: 4, start: "14:45", end: "16:25" },
+        { p: 5, start: "16:40", end: "18:20" }
+    ];
+
+    function checkTimeAndEnableButton() {
+        const now = new Date();
+        const currentMins = now.getHours() * 60 + now.getMinutes();
+        
+        let isClassTime = false;
+        let targetPeriod = 0;
+
+        CLASS_TIMES.forEach(t => {
+            const [sh, sm] = t.start.split(":").map(Number);
+            const [eh, em] = t.end.split(":").map(Number);
+            const startMins = sh * 60 + sm;
+            const endMins = eh * 60 + em;
+
+            // 前後10分余裕を見る
+            if (currentMins >= (startMins - 10) && currentMins <= (endMins + 10)) {
+                isClassTime = true;
+                targetPeriod = t.p;
+            }
+        });
+
+        if (isClassTime) {
+            authBtn.disabled = false;
+            authBtn.className = "w-full py-3 px-6 rounded-lg font-bold text-white transition duration-200 bg-blue-600 hover:bg-blue-700 shadow-md transform hover:-translate-y-1";
+            authBtn.innerHTML = `📸 第${targetPeriod}限の出席を登録する`;
+        } else {
+            authBtn.disabled = true;
+            authBtn.className = "w-full py-3 px-6 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed";
+            authBtn.innerHTML = "🕒 授業時間外です";
+        }
+        
+        // 1分ごとに再チェック
+        setTimeout(checkTimeAndEnableButton, 60000);
+    }
+
+    // 3. 撮影＆送信処理
+    function captureAndAuth() {
+        authBtn.disabled = true;
+        authBtn.innerHTML = "🔄 送信中...";
+        resultMsg.className = "hidden";
+
+        // 画像取得
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+        // 送信
+        fetch('/api/portal_face_auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageData })
+        })
+        .then(res => res.json())
+        .then(data => {
+            resultMsg.classList.remove("hidden");
+            if (data.status === 'success' || data.status === 'info') {
+                resultMsg.textContent = data.message;
+                resultMsg.classList.add("bg-green-100", "text-green-700");
+                authBtn.innerHTML = "✅ 登録完了";
+                // 成功したら花吹雪エフェクトなどを出すと楽しいかも
+            } else {
+                resultMsg.textContent = "エラー: " + data.message;
+                resultMsg.classList.add("bg-red-100", "text-red-700");
+                authBtn.disabled = false;
+                authBtn.innerHTML = "再試行する";
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("通信エラーが発生しました");
+            authBtn.disabled = false;
+            authBtn.innerHTML = "再試行する";
+        });
+    }
+    
+    // 初回実行
+    checkTimeAndEnableButton();
+</script>
             <h2 class="text-2xl font-bold text-gray-700 mb-4">あなたの出席サマリー (第{{ selected_kiki }}期)</h2>
             
             <div class="bg-white p-6 rounded-xl shadow-xl">
