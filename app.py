@@ -3055,6 +3055,109 @@ def student_logout():
     flash("ログアウトしました。", "success")
     return redirect(url_for('student_login'))
 
+@app.route("/api/trigger_auth_command", methods=["POST"])
+@login_required
+def api_trigger_auth_command():
+    """学生がボタンを押して、自分のPCのPythonに命令を出す"""
+    student_id = current_user.学生ID
+    
+    # 命令をセット ("START_AUTH" という手紙を郵便受けに入れる)
+    auth_commands[str(student_id)] = "START_AUTH"
+    
+    print(f"🔔 [命令セット] ID:{student_id} -> START_AUTH")
+    return jsonify({"status": "success", "message": "PCのカメラに起動命令を出しました。"})
+
+
+# 2. Python(PC) -> Server: 「自分宛ての命令ある？」と確認する
+@app.route("/api/check_my_command", methods=["GET"])
+def api_check_my_command():
+    """PCのPythonが定期的にアクセスして命令を確認する"""
+    student_id = request.args.get("student_id")
+    if not student_id:
+        return jsonify({"command": None})
+    
+    # 命令を取り出す (取り出したら辞書から消す = 1回限り実行)
+    command = auth_commands.pop(str(student_id), None)
+    
+    if command:
+        print(f"📤 [命令送信] ID:{student_id} に {command} を渡しました")
+        
+    return jsonify({"command": command})
+
+
+# 3. Python(PC) -> Server: 「認証成功したよ！」と報告する
+@app.route("/api/report_auth_result", methods=["POST"])
+def api_report_auth_result():
+    """PCからの顔認証結果を受け取って出席にする"""
+    try:
+        data = request.get_json()
+        student_id = data.get("student_id")
+        result = data.get("result") # "SUCCESS"
+        
+        if not student_id:
+            return jsonify({"status": "error", "message": "IDがありません"}), 400
+
+        if result == "SUCCESS":
+            print(f"✅ [認証成功受信] 学生ID: {student_id}")
+            
+            # --- ここから出席登録ロジック ---
+            now = datetime.now()
+            
+            # ① 今の時間の授業を探す (前後20分の余裕を持たせる)
+            target_period = None
+            all_periods = TimeTable.query.all()
+            
+            for p in all_periods:
+                p_start = datetime.combine(now.date(), p.開始時刻)
+                p_end = datetime.combine(now.date(), p.終了時刻)
+                
+                # 開始20分前 〜 終了20分後 までOK
+                if (p_start - timedelta(minutes=20)) <= now <= (p_end + timedelta(minutes=20)):
+                    target_period = p.時限
+                    break
+            
+            if not target_period:
+                return jsonify({"status": "error", "message": "授業時間外です"})
+
+            # ② 授業IDを特定
+            today_yobi_str = YOBI_MAP_REVERSE.get((now.weekday() + 1) % 7)
+            kiki = get_current_kiki()
+            class_row = 時間割.query.filter_by(学期=kiki, 曜日=today_yobi_str, 時限=target_period).first()
+            subject_id = class_row.授業ID if class_row else 0
+
+            if subject_id == 0:
+                 return jsonify({"status": "error", "message": "授業がありません"})
+
+            # ③ 重複チェックして登録
+            existing = 出席記録.query.filter_by(学生ID=student_id, 授業ID=subject_id, 出席日付=now.date(), 時限=target_period).first()
+
+            if not existing:
+                new_attendance = 出席記録(
+                    学生ID=student_id,
+                    授業ID=subject_id,
+                    出席時刻=now,
+                    状態="出席",
+                    時限=target_period
+                )
+                db.session.add(new_attendance)
+                db.session.commit()
+                
+                # (オプション) アラート判定などもここで呼べます
+                # check_and_send_alert(student_id, subject_id)
+                
+                return jsonify({"status": "success", "message": "出席登録完了"})
+            else:
+                # 既に登録済みの場合は時刻だけ更新(在席確認)
+                existing.出席時刻 = now
+                db.session.commit()
+                return jsonify({"status": "success", "message": "在席確認完了(更新)"})
+        
+        return jsonify({"status": "ignored", "message": "認証失敗または不明なステータス"})
+
+    except Exception as e:
+        print(f"Report Auth Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 # --- 12. 実行 ---
 if __name__ == "__main__":
     with app.app_context():
