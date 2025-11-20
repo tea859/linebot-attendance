@@ -2327,35 +2327,6 @@ def send_schedule_email_route():
         
     return redirect(url_for('index'))
 
-# app.py の最後の方に追加
-@app.route("/test_alert_force")
-@login_required
-def test_alert_force():
-    # データベースにある最初の学生と授業を取得してテスト
-    student = 学生.query.first()
-    subject = 授業.query.filter(授業.授業ID != 0).first()
-    
-    if not student or not subject:
-        return "学生または授業データがないためテストできません。"
-
-    check_and_send_alert(student.学生ID,subject.授業ID)
-    
-    # もしくは、もっと単純にGAS送信部分だけをテストするならこれ↓
-    try:
-        gas_url = os.environ.get('GAS_API_URL')
-        gas_token = os.environ.get('GAS_AUTH_TOKEN')
-        
-        payload = {
-            "to": os.environ.get('MAIL_USERNAME'),
-            "subject": "🔔【テスト】出席率低下アラートのテスト通知",
-            "body": "これはテストです。このメールが届けば、RenderからGAS経由での通知機能は正常に動いています。",
-            "auth_token": gas_token
-        }
-        resp = requests.post(gas_url, json=payload)
-        return f"送信完了！GASからの応答: {resp.text}"
-    except Exception as e:
-        return f"エラー発生: {e}"
-
 @app.route("/alerts")
 @login_required
 def alerts():
