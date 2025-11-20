@@ -314,9 +314,9 @@ def check_and_send_alert(student_id, subject_id):
 
         # ★ここから下を変更（GASへ送信依頼）★
         if rate < 80:
-            print(f"🚨 [DEBUG] 出席率 {rate}% (80%未満) なので通知を送ります")
+            print(f"[DEBUG] 出席率 {rate}% (80%未満) なので通知を送ります")
             
-            msg_subject = f"⚠️【出席率注意】{student.学生名}さん - {subject.授業科目名}"
+            msg_subject = f"【出席率注意】{student.学生名}さん - {subject.授業科目名}"
             msg_body = (
                 f"出席管理システムからの自動通知\n"
                 f"--------------------------------\n"
@@ -348,7 +348,7 @@ def check_and_send_alert(student_id, subject_id):
                 print("⚠️ [ERROR] GAS_API_URL または GAS_AUTH_TOKEN が設定されていません")
 
     except Exception as e:
-        print(f"🔥 [ERROR] アラート処理エラー: {e}")
+        print(f" [ERROR] アラート処理エラー: {e}")
 
 
 # ----------------------------------------------------------------------
@@ -2325,10 +2325,6 @@ def send_schedule_email_route():
 @app.route("/test_alert_force")
 @login_required
 def test_alert_force():
-    """
-    強制的にアラートメール送信ロジックをテストするURL
-    (実際の出席率に関係なく、ロジックが通るか確認用)
-    """
     # データベースにある最初の学生と授業を取得してテスト
     student = 学生.query.first()
     subject = 授業.query.filter(授業.授業ID != 0).first()
@@ -2336,10 +2332,7 @@ def test_alert_force():
     if not student or not subject:
         return "学生または授業データがないためテストできません。"
 
-    # ここで check_and_send_alert を呼び出す
-    # ※ 本来は出席率が低くないと送られませんが、
-    #    テストのために print文などでログを確認するか、
-    #    一時的に check_and_send_alert 内の「if rate < 80:」をコメントアウトして確認します。
+    check_and_send_alert(student.学生ID,subject.授業ID)
     
     # もしくは、もっと単純にGAS送信部分だけをテストするならこれ↓
     try:
