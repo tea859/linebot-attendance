@@ -53,6 +53,15 @@
             vertical-align: middle;
             font-size: 0.9em;
         }
+        /* アニメーション */
+        @keyframes pulse-blue {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        .animate-pulse-blue {
+            animation: pulse-blue 2s infinite;
+        }
     </style>
 </head>
 <body class="bg-gray-100 p-8">
@@ -85,44 +94,41 @@
         </header>
 
         <main>
-            <div class="bg-white p-6 rounded-xl shadow-lg mb-8 border-t-4 border-blue-500">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-bold text-gray-700"><i class="fas fa-camera mr-2"></i> カメラで出席登録</h2>
-                    <span id="clock" class="font-mono text-sm bg-gray-200 px-2 py-1 rounded text-gray-700">--:--:--</span>
-                </div>
+            <div class="bg-white p-8 rounded-xl shadow-lg mb-8 border-t-4 border-indigo-500 text-center">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6"><i class="fas fa-satellite-dish mr-2"></i> PCカメラで出席登録</h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    <div class="relative bg-black rounded-lg overflow-hidden shadow-inner aspect-video">
-                        <video id="userVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                        <canvas id="userCanvas" class="hidden"></canvas>
-                        
-                        <div id="cameraStatus" class="absolute top-2 left-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded flex items-center">
-                            <span class="w-2 h-2 bg-gray-400 rounded-full mr-2" id="statusDot"></span>
-                            <span id="statusText">カメラ待機中...</span>
-                        </div>
+                <div id="step1">
+                    <p class="text-gray-600 mb-8 text-lg">
+                        下のボタンを押すと、あなたのPC上のカメラプログラムが起動して顔認証を行います。<br>
+                        <span class="text-sm text-gray-400 font-bold">※あらかじめPCで認証ソフト(Python)を起動しておいてください</span>
+                    </p>
+                    <button onclick="startRemoteAuth()" 
+                        class="w-full sm:w-1/2 py-5 px-8 bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold rounded-full shadow-xl transform transition hover:-translate-y-1 hover:shadow-2xl flex items-center justify-center mx-auto animate-pulse-blue">
+                        <i class="fas fa-play-circle mr-3"></i> 認証スタート
+                    </button>
+                </div>
+
+                <div id="step2" class="hidden py-8">
+                    <div class="flex justify-center mb-6">
+                        <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-indigo-600"></div>
                     </div>
-            
-                    <div class="flex flex-col justify-center space-y-4">
-                        <p class="text-sm text-gray-600">
-                            授業開始の前後になると、ボタンが有効になります。<br>
-                            カメラに顔を向けて「出席登録」を押してください。
-                        </p>
-                        
-                        <button id="authButton" onclick="captureAndAuth()" disabled
-                            class="w-full py-4 px-6 rounded-lg font-bold text-white transition duration-200
-                                   bg-gray-400 cursor-not-allowed shadow-none flex items-center justify-center space-x-2">
-                            <i class="fas fa-clock"></i>
-                            <span>授業時間外です</span>
-                        </button>
-                        
-                        <div id="resultMsg" class="hidden p-3 rounded-lg text-sm font-bold text-center"></div>
+                    <h3 class="text-2xl font-bold text-indigo-600 mb-2">PCと通信中...</h3>
+                    <p class="text-gray-500 text-lg animate-pulse">PCのカメラを見てください！</p>
+                </div>
+
+                <div id="step3" class="hidden py-8">
+                    <div class="text-7xl text-green-500 mb-6 animate-bounce">
+                        <i class="fas fa-check-circle"></i>
                     </div>
+                    <h2 class="text-3xl font-bold text-green-600 mb-2">出席完了！</h2>
+                    <p class="text-gray-600 mb-8 text-lg">サーバーに登録されました。</p>
+                    <button onclick="location.reload()" class="text-indigo-500 font-bold underline hover:text-indigo-700 text-lg">
+                        画面を更新する
+                    </button>
                 </div>
             </div>
-
             <div class="bg-white p-6 rounded-xl shadow-xl mb-8 border border-gray-200">
                 <h3 class="text-lg font-bold text-gray-700 mb-3">⚙️ 設定</h3>
-                
                 <form action="/update_parent_email" method="POST" class="flex flex-col sm:flex-row items-end gap-4">
                     <div class="flex-grow w-full">
                         <label for="parent_email" class="block text-sm font-medium text-gray-700 mb-1">
@@ -142,18 +148,15 @@
 
             <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
                 <h2 class="text-2xl font-bold text-gray-700 mb-4">あなたの出席サマリー (第{{ selected_kiki }}期)</h2>
-                
                 <div class="bg-white rounded-xl">
                     {% if report_data %}
                         <div class="space-y-6">
                             {% for row in report_data %}
                             <div class="border border-gray-200 p-4 rounded-lg">
                                 <h3 class="text-lg font-bold text-gray-800">{{ row.subject }}</h3>
-                                
                                 <p class="text-2xl font-extrabold {% if row.attendance_rate >= 80 %}text-green-600{% elif row.attendance_rate >= 50 %}text-yellow-600{% else %}text-red-600{% endif %}">
                                     {{ row.attendance_rate }}%
                                 </p>
-                                
                                 <div class="text-sm text-gray-600 mt-2">
                                     <span>今日までの回数: <span class="font-bold">{{ row.total_classes_so_far }}</span></span> |
                                     <span>出席: <span class="font-bold text-green-600">{{ row.attendance_count }}</span></span> |
@@ -175,7 +178,6 @@
             <hr style="margin-top: 2em; margin-bottom: 2em;">
 
             <h2 class="text-2xl font-bold text-gray-700 mb-4">現在の時間割 (第{{ selected_kiki }}期)</h2>
-            
             <table class="schedule-table bg-white shadow-lg rounded-xl overflow-hidden">
                 <thead>
                     <tr>
@@ -191,12 +193,9 @@
                     {% for jigen in 時限一覧 %}
                     <tr>
                         <td class="period-header">{{ jigen }}限</td>
-                        
                         {% for yobi in 曜日順 %}
                         <td {% if yobi == today_yobi %}class="today"{% endif %}>
-                            
                             {% set cell = schedule_grid[jigen][yobi] %}
-                            
                             {% if cell.is_empty %}
                                 <div class="empty">{{ cell.display_text }}</div>
                             {% else %}
@@ -218,130 +217,60 @@
     </div>
 
     <script>
-        // 1. 要素の取得
-        const video = document.getElementById('userVideo');
-        const canvas = document.getElementById('userCanvas');
-        const authBtn = document.getElementById('authButton');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const resultMsg = document.getElementById('resultMsg');
-        const clockEl = document.getElementById('clock');
+        function startRemoteAuth() {
+            // 1. 画面を「待機中」に切り替え
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
 
-        // 2. 時限設定 (開始時刻, 終了時刻)
-        // ※サーバーのTimeTableに合わせて調整してください
-        const CLASS_TIMES = [
-            { p: 1, start: "08:50", end: "10:30" },
-            { p: 2, start: "10:35", end: "12:15" },
-            { p: 3, start: "13:00", end: "14:40" },
-            { p: 4, start: "14:45", end: "16:25" },
-            { p: 5, start: "16:40", end: "18:20" }
-        ];
-
-        // 時計更新 & 時間チェック
-        setInterval(() => {
-            const now = new Date();
-            clockEl.textContent = now.toLocaleTimeString('ja-JP');
-            checkTimeAndEnableButton(); // 毎秒チェック
-        }, 1000);
-
-        // 3. カメラ起動処理
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                video.srcObject = stream;
-                statusDot.classList.remove('bg-gray-400');
-                statusDot.classList.add('bg-green-400', 'animate-pulse');
-                statusText.textContent = "カメラ稼働中";
-                
-                // 初回の時間チェック
-                checkTimeAndEnableButton();
-                
-            } catch (err) {
-                console.error("カメラエラー:", err);
-                statusDot.classList.remove('bg-gray-400');
-                statusDot.classList.add('bg-red-500');
-                statusText.textContent = "カメラ許可が必要です";
-            }
-        }
-        startCamera();
-
-        // 4. 時間判定ロジック
-        function checkTimeAndEnableButton() {
-            const now = new Date();
-            const currentMins = now.getHours() * 60 + now.getMinutes();
-            
-            let isClassTime = false;
-            let targetPeriod = 0;
-
-            CLASS_TIMES.forEach(t => {
-                const [sh, sm] = t.start.split(":").map(Number);
-                const [eh, em] = t.end.split(":").map(Number);
-                const startMins = sh * 60 + sm;
-                const endMins = eh * 60 + em;
-
-                // 前後20分の余裕を持たせる
-                if (currentMins >= (startMins - 20) && currentMins <= (endMins + 20)) {
-                    isClassTime = true;
-                    targetPeriod = t.p;
-                }
-            });
-
-            if (isClassTime) {
-                // 既に送信中や完了状態ならボタンを書き換えない
-                if (authBtn.disabled && !authBtn.innerHTML.includes("時間外")) {
-                    return; 
-                }
-
-                authBtn.disabled = false;
-                authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-700 shadow-lg transform hover:-translate-y-1 flex items-center justify-center space-x-2";
-                authBtn.innerHTML = `<i class="fas fa-camera"></i><span>第${targetPeriod}限の出席を登録する</span>`;
-            } else {
-                authBtn.disabled = true;
-                authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-gray-400 cursor-not-allowed shadow-none flex items-center justify-center space-x-2";
-                authBtn.innerHTML = `<i class="fas fa-clock"></i><span>授業時間外です</span>`;
-            }
+            // 2. サーバーに命令を送る
+            fetch('/api/trigger_remote_auth', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        // 3. 成功したら、結果が出るまでサーバーに聞き続ける (ポーリング開始)
+                        pollForResult();
+                    } else {
+                        alert("エラー: " + data.message);
+                        resetScreen();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("通信エラーが発生しました");
+                    resetScreen();
+                });
         }
 
-        // 5. 撮影＆送信処理
-        function captureAndAuth() {
-            authBtn.disabled = true;
-            authBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>送信中...</span>`;
-            resultMsg.className = "hidden";
+        function pollForResult() {
+            // 1秒ごとにサーバーに「終わった？」と聞く
+            const intervalId = setInterval(() => {
+                fetch('/api/check_remote_result')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // 成功！ループを止めて「成功画面」へ
+                            clearInterval(intervalId);
+                            document.getElementById('step2').classList.add('hidden');
+                            document.getElementById('step3').classList.remove('hidden');
+                        }
+                    })
+                    .catch(err => console.error("待機中エラー:", err));
+            }, 1000); // 1秒間隔
 
-            // 画像取得
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            const imageData = canvas.toDataURL('image/jpeg', 0.8);
-
-            // 送信
-            fetch('/api/portal_face_auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: imageData })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success' || data.status === 'info') {
-                    // 成功時
-                    resultMsg.textContent = data.message;
-                    resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-green-100 text-green-700 border border-green-400 block";
-                    authBtn.innerHTML = `<i class="fas fa-check"></i><span>登録完了</span>`;
-                    authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-blue-500 cursor-default flex items-center justify-center space-x-2";
-                } else {
-                    // エラー時（授業外など）
-                    throw new Error(data.message);
+            // 30秒経ってもダメならタイムアウト
+            setTimeout(() => {
+                clearInterval(intervalId);
+                if (document.getElementById('step3').classList.contains('hidden')) {
+                    alert("タイムアウト: PCからの応答がありませんでした。\nPythonプログラムが起動しているか確認してください。");
+                    resetScreen();
                 }
-            })
-            .catch(err => {
-                console.error(err);
-                resultMsg.textContent = "エラー: " + err.message;
-                resultMsg.className = "p-4 rounded-lg text-sm font-bold text-center bg-red-100 text-red-700 border border-red-400 block";
-                authBtn.disabled = false;
-                authBtn.className = "w-full py-4 px-6 rounded-lg font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg flex items-center justify-center space-x-2";
-                authBtn.innerHTML = `<i class="fas fa-redo"></i><span>再試行する</span>`;
-            });
+            }, 30000); 
+        }
+
+        function resetScreen() {
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
         }
     </script>
 </body>
