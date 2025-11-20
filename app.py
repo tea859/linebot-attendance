@@ -44,7 +44,13 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
 # --- ▲ SQLAlchemy に変更 ▲ ---
 TEMP_EXIT_STATUS = "一時退出中"
-SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN', 'YOUR_STRONG_SECRET_TOKEN_HERE')
+# デフォルト値を削除し、設定がない場合はNoneにする（またはエラーにする）
+SCHEDULE_API_TOKEN = os.environ.get('SCHEDULE_API_TOKEN')
+app.secret_key = os.environ.get('SECRET_KEY')
+
+# 必須チェックを入れるとさらに安全
+if not app.secret_key:
+    raise ValueError("No SECRET_KEY set for Flask application")
 load_dotenv()
 app = Flask(__name__)
 BASE_URL = os.environ.get('BASE_URL', 'http://127.0.0.1:5000') # 開発中はローカルを指す
@@ -2975,4 +2981,4 @@ def student_logout():
 if __name__ == "__main__":
     with app.app_context():
         pass
-    app.run(host="0.0.0.0", port=5000, threaded=True, debug=True)
+    app.run(host="0.0.0.0", port=5000, threaded=True)
