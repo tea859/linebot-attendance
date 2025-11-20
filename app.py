@@ -2981,4 +2981,5 @@ def student_logout():
 if __name__ == "__main__":
     with app.app_context():
         pass
-    app.run(host="0.0.0.0", port=5000, threaded=True)
+    is_debug = os.environ.get('FLASK_DEBUG', 'False') == 'True'
+    app.run(host="0.0.0.0", port=5000, threaded=True, debug=is_debug)
