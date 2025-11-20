@@ -1068,7 +1068,6 @@ def index():
         {"url": "/manage_students", "name": "学生管理"},
         {"url": "/manage_subjects", "name": "授業科目管理"},
         {"url": "/alerts", "name": "📢 遅刻・欠席連絡 掲示板"},
-        {"url": "/student_login", "name": "学生専用ポータル (ログイン)"},
     ]
     
     return render_template("index.html", 
