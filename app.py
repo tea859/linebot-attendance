@@ -3160,26 +3160,32 @@ def api_check_remote_result():
 
 @app.route('/api/upload_image', methods=['POST'])
 def upload_image():
-    student_id = request.form.get('student_id')
-    image_file = request.files.get('file') # .getを使うとエラーになりにくい
-    
-    if image_file and student_id:
-        # ファイル名を安全なものに変換 (例: "../taro.jpg" -> "taro.jpg")
-        safe_filename = secure_filename(image_file.filename)
-        
-        # ID_ファイル名 の形式にする
-        save_name = f"{student_id}_{safe_filename}"
-        save_path = os.path.join(UPLOAD_DIR, save_name)
-        
-        try:
-            image_file.save(save_path)
-            print(f"📸 画像が保存されました: {save_path}")
-            return 'Image uploaded successfully', 200
-        except Exception as e:
-            print(f"保存エラー: {e}")
-            return f'Error saving file: {e}', 500
-            
-    return 'No file or student_id uploaded', 400
+    """画像をアップロードして保存するだけのAPI (JSON/Base64方式)"""
+    try:
+        # 1. JSONデータを受け取る
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "データがありません"}), 400
+
+        student_id = data.get('student_id')
+        image_data = data.get('image') # Base64文字列
+
+        if not student_id or not image_data:
+            return jsonify({"error": "student_id または image が不足しています"}), 400
+
+        # 2. 既存の便利関数 save_image を使って保存
+        # (これならデコードやファイル名生成を勝手にやってくれます)
+        filename = save_image(image_data, student_id)
+
+        if filename:
+            print(f"📸 画像保存成功: {filename}")
+            return jsonify({"status": "success", "filename": filename}), 200
+        else:
+            return jsonify({"status": "error", "message": "保存に失敗しました"}), 500
+
+    except Exception as e:
+        print(f"Upload Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- 12. 実行 ---
 if __name__ == "__main__":
