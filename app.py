@@ -1459,6 +1459,7 @@ def attendance():
                     状態=状態,
                     時限=時限
                 )
+                check_and_send_alert(学生ID, 授業ID)
                 db.session.add(new_attendance)
                 db.session.commit()
             except IntegrityError:
