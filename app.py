@@ -42,6 +42,7 @@ from sqlalchemy import Integer, String, ForeignKey, func, UniqueConstraint, text
 from sqlalchemy import Time as SQLTime, DateTime as SQLDateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.exc import IntegrityError 
+app = Flask(__name__)
 # --- ▲ SQLAlchemy に変更 ▲ ---
 TEMP_EXIT_STATUS = "一時退出中"
 # デフォルト値を削除し、設定がない場合はNoneにする（またはエラーにする）
@@ -52,7 +53,6 @@ app.secret_key = os.environ.get('SECRET_KEY')
 if not app.secret_key:
     raise ValueError("No SECRET_KEY set for Flask application")
 load_dotenv()
-app = Flask(__name__)
 BASE_URL = os.environ.get('BASE_URL', 'http://127.0.0.1:5000') # 開発中はローカルを指す
 
 # ----------------------------------------------------------------------
