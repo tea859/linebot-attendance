@@ -42,11 +42,13 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Integer, String, ForeignKey, func, UniqueConstraint, text, Column, Computed 
 from sqlalchemy import Time as SQLTime, DateTime as SQLDateTime
 from sqlalchemy.orm import relationship
-from sqlalchemy.exc import IntegrityError 
+from sqlalchemy.exc import IntegrityError
+from werkzeug.utils import secure_filename # ファイル名を安全にする機能
 app = Flask(__name__)
-UPLOAD_FOLDER = 'captured_images'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+
+UPLOAD_DIR = 'uploaded_images'
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR) # フォルダがなければ自動で作る
 
 auth_commands = {}
 # --- ▲ SQLAlchemy に変更 ▲ ---
@@ -3159,14 +3161,25 @@ def api_check_remote_result():
 @app.route('/api/upload_image', methods=['POST'])
 def upload_image():
     student_id = request.form.get('student_id')
-    image_file = request.files['file']
+    image_file = request.files.get('file') # .getを使うとエラーになりにくい
     
-    if image_file:
-        filename = os.path.join('uploaded_images', f"{student_id}_{image_file.filename}")
-        image_file.save(filename)
-        print(f"画像が保存されました: {filename}")
-        return 'Image uploaded successfully', 200
-    return 'No file uploaded', 400
+    if image_file and student_id:
+        # ファイル名を安全なものに変換 (例: "../taro.jpg" -> "taro.jpg")
+        safe_filename = secure_filename(image_file.filename)
+        
+        # ID_ファイル名 の形式にする
+        save_name = f"{student_id}_{safe_filename}"
+        save_path = os.path.join(UPLOAD_DIR, save_name)
+        
+        try:
+            image_file.save(save_path)
+            print(f"📸 画像が保存されました: {save_path}")
+            return 'Image uploaded successfully', 200
+        except Exception as e:
+            print(f"保存エラー: {e}")
+            return f'Error saving file: {e}', 500
+            
+    return 'No file or student_id uploaded', 400
 
 # --- 12. 実行 ---
 if __name__ == "__main__":
