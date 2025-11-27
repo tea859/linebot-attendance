@@ -1474,7 +1474,7 @@ def api_status():
             db.session.rollback()
             app.logger.error(f"【自動出席エラー】不明なエラー: {e}")
     
-    all_students = 学生.query.all()
+    all_students = 学生.query.order_by(学生.学生ID).all()
     
     # 教室名も取得 (LEFT JOIN)
     active_sessions = db.session.query(
