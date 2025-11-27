@@ -2496,170 +2496,191 @@ if handler:
             abort(400) # ⬅️ abort を import する必要があります
         return 'OK'
 
+    # ----------------------------------------------------------------------
+    # LINE メッセージハンドラ (完全版)
+    # ----------------------------------------------------------------------
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
         """LINEのテキストメッセージを処理する"""
         received_text = event.message.text
         user_id = event.source.user_id
-        reply_message = ""
-        now = datetime.now()
-        quick_reply_buttons = QuickReply(items=[
-            QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
-            QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
-            QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
-            
-            # 👇 新しく追加する一時退出のボタン
-            QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
-            QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
-            
-            # 👇 最終退室のボタン（既存の「退室」ボタンを明確化）
-            QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")), 
-        ])
-        # --- 1. アカウント登録処理 ---
+        reply_message = None
+
+        # ==========================================
+        # 1. アカウント登録処理
+        # ==========================================
         if received_text.startswith("登録"):
             try:
-                input_student_id = int(received_text.split(":")[1].strip())
-            except (IndexError, ValueError):
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="❌ 登録形式が正しくありません。「登録:学生ID」の形式で入力してください。"))
-
-            student = 学生.query.get(input_student_id)
-            if not student:
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。"))
-            
-            # 既存の紐付けをチェック
-            existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
-            if existing_mapping:
-                existing_mapping.student_id = input_student_id
-                db.session.commit()
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 登録情報を更新しました。\nあなたのID ({input_student_id}) が紐づきました。"))
-
-            # 新しい紐付けを登録
-            new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
-            db.session.add(new_mapping)
-            db.session.commit()
-            return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🎉 登録が完了しました！\nあなたのID ({input_student_id}) がBotに紐づきました。"))
-        
-        # --- 2. 遅刻/欠席の連絡処理 ---
-        if received_text.startswith("欠席連絡") or received_text.startswith("遅刻連絡:"):
-    
-            # ユーザーの学生IDを取得
-            student_id = get_student_id_from_line_user(user_id)
-            if student_id is None:
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 登録がされていません。\n「登録:学生ID」で紐付けてください。"))
-
-            report_type = "欠席" if received_text.startswith("欠席連絡") else "遅刻"
-            try:
-                reason = received_text.split(":", 1)[1].strip()
-                if not reason: raise IndexError
-            except IndexError:
-                return line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ {report_type}連絡の理由を必ず記述してください。\n例: 「{report_type}連絡:腹痛のため」"))
-            
-            # データベースに記録
-            new_report = ReportRecord(
-                student_id=student_id,
-                report_type=report_type,
-                reason=reason,
-                report_date=datetime.now(),
-                is_resolved=False
-            )
-            db.session.add(new_report)
-            db.session.commit()
-            
-            student = 学生.query.get(student_id)
-            return line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                text=f"📢 {student.学生名}さん、{report_type}連絡を承りました。\n理由: {reason}\n管理者へ通知します。"
-            ))
-
-        if received_text == "今日の時間割" or received_text == "明日の時間割":
-            days_ahead = 0 if received_text == "今日の時間割" else 1
-            target_date = now + timedelta(days=days_ahead)
-            
-            # (休日判定)
-            if target_date.weekday() >= 5: # 土日
-                reply_message_text = f"📅 {target_date.strftime('%Y/%m/%d')} は土日祝日のため、授業はありません。"
-                # 土日の場合はテキストで返信
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=reply_message_text, quick_reply=quick_reply_buttons)
-                )
-                return # ★ここで処理を終了
-
-            else:
-                # ▼▼▼ ここが変更点 ▼▼▼
-                # get_schedule_for_line が BubbleContainer または 文字列 を返す
-                schedule_data = get_schedule_for_line(target_date) 
+                # "登録:222521301" の形式を想定
+                parts = received_text.split(":")
+                if len(parts) < 2: raise ValueError
                 
-                if isinstance(schedule_data, BubbleContainer):
-                    # 戻り値が BubbleContainer だったら FlexSendMessage で送信
-                    reply_message = FlexSendMessage(
-                        alt_text=f"{target_date.strftime('%Y/%m/%d')}の時間割",
-                        contents=schedule_data, # ここにBubbleを入れる
-                        quick_reply=quick_reply_buttons # FlexにもQuickReplyは付けられる
-                    )
+                input_student_id = int(parts[1].strip())
+                student = 学生.query.get(input_student_id)
+                
+                if not student:
+                    reply_message = TextSendMessage(text=f"❌ 学生ID {input_student_id} はデータベースに存在しません。")
                 else:
-                    # 戻り値が 文字列 だったら (エラー時) TextSendMessage で送信
-                    reply_message = TextSendMessage(
-                        text=schedule_data, # (例: "授業計画が見つかりません。")
-                        quick_reply=quick_reply_buttons
-                    )
-                
-                line_bot_api.reply_message(event.reply_token, reply_message)
-                return # ★ここで処理を終了
-            
-        elif received_text == "出席サマリー":
-            summary_data = get_attendance_summary_for_line(user_id) 
-            
-            if isinstance(summary_data, BubbleContainer):
-                # 戻り値が BubbleContainer だったら FlexSendMessage で送信
-                reply_message_obj = FlexSendMessage(
-                    alt_text=f"出席サマリー",
-                    contents=summary_data, # ここにBubbleを入れる
-                    quick_reply=quick_reply_buttons # QuickReplyも付ける
-                )
-            else:
-                # 戻り値が 文字列 だったら (エラー時) TextSendMessage で送信
-                reply_message_obj = TextSendMessage(
-                    text=summary_data, # (例: "学生IDが登録されていません。")
-                    quick_reply=quick_reply_buttons
-                )
-            
-            line_bot_api.reply_message(event.reply_token, reply_message_obj)
-            return # ★ここで処理を終了
-            
-        elif received_text == "退室":
-            # 在室履歴を終了させるロジック
-            reply_message = process_exit_record(user_id) # ⚠️ 新しいヘルパー関数を定義します
+                    # 既存の紐付けを確認
+                    existing_mapping = LineUser.query.filter_by(line_user_id=user_id).first()
+                    
+                    if existing_mapping:
+                        existing_mapping.student_id = input_student_id
+                        reply_message = TextSendMessage(text=f"✅ 登録情報を更新しました。\nID: {input_student_id} ({student.学生名})")
+                    else:
+                        new_mapping = LineUser(line_user_id=user_id, student_id=input_student_id)
+                        db.session.add(new_mapping)
+                        reply_message = TextSendMessage(text=f"🎉 登録完了！\nID: {input_student_id} ({student.学生名}) が紐づきました。")
+                    
+                    db.session.commit()
+            except:
+                reply_message = TextSendMessage(text="❌ 入力形式が違います。\n「登録:学生ID」の形式で送信してください。\n例: 登録:222521301")
+
+        # ==========================================
+        # 2. リッチメニューからの親メニュー呼び出し
+        # ==========================================
+
+        # 【A. 時間割メニュー】
+        elif received_text == "時間割メニュー":
+            buttons = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
+                QuickReplyButton(action=MessageAction(label="明日の時間割", text="明日の時間割")),
+            ])
+            reply_message = TextSendMessage(text="いつの時間割を表示しますか？", quick_reply=buttons)
+
+        # 【B. 出席・連絡メニュー】
+        elif received_text == "出席・連絡メニュー":
+            buttons = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
+                QuickReplyButton(action=MessageAction(label="遅刻連絡する", text="遅刻フォーム起動")),
+                QuickReplyButton(action=MessageAction(label="欠席連絡する", text="欠席フォーム起動")),
+            ])
+            reply_message = TextSendMessage(text="機能を選択してください。", quick_reply=buttons)
+
+        # 【C. 退出メニュー】
+        elif received_text == "退出メニュー":
+            buttons = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
+                QuickReplyButton(action=MessageAction(label="戻りました", text="戻りました")),
+                QuickReplyButton(action=MessageAction(label="最終退室", text="最終退室")),
+            ])
+            reply_message = TextSendMessage(text="退出操作を選んでください。", quick_reply=buttons)
+
+        # ==========================================
+        # 3. 入力補助（魔法のリンク）
+        # ==========================================
         
+        elif received_text == "遅刻フォーム起動":
+            # ★ここを自分のBot IDに書き換えてください！
+            bot_id = "@742gxeis" 
+            url = f"https://line.me/R/oaMessage/{bot_id}/?遅刻連絡:"
+            
+            reply_message = TextSendMessage(
+                text=f"▼ 以下のリンクをタップして、理由を入力してください。\n\n{url}"
+            )
+
+        elif received_text == "欠席フォーム起動":
+            bot_id = "@742gxeis"
+            url = f"https://line.me/R/oaMessage/{bot_id}/?欠席連絡:"
+            
+            reply_message = TextSendMessage(
+                text=f"▼ 以下のリンクをタップして、理由を入力してください。\n\n{url}"
+            )
+
+        # ==========================================
+        # 4. 各機能の実行
+        # ==========================================
+
+        # --- 時間割 ---
+        elif received_text == "今日の時間割" or received_text == "明日の時間割":
+            days_ahead = 0 if received_text == "今日の時間割" else 1
+            target_date = datetime.now() + timedelta(days=days_ahead)
+            
+            # 土日チェック
+            if target_date.weekday() >= 5:
+                reply_message = TextSendMessage(text=f"📅 {target_date.strftime('%Y/%m/%d')} は休校日です。")
+            else:
+                data = get_schedule_for_line(target_date)
+                if isinstance(data, BubbleContainer):
+                    reply_message = FlexSendMessage(alt_text="時間割", contents=data)
+                else:
+                    reply_message = TextSendMessage(text=data)
+
+        # --- 出席サマリー ---
+        elif received_text == "出席サマリー":
+            data = get_attendance_summary_for_line(user_id)
+            if isinstance(data, BubbleContainer):
+                reply_message = FlexSendMessage(alt_text="出席サマリー", contents=data)
+            else:
+                reply_message = TextSendMessage(text=data)
+
+        # --- 退出管理 ---
+        elif received_text == "一時退出":
+            msg = process_temporary_exit(user_id)
+            reply_message = TextSendMessage(text=msg)
+
+        elif received_text == "戻りました":
+            msg = process_return_from_exit(user_id)
+            reply_message = TextSendMessage(text=msg)
+
+        elif received_text == "最終退室":
+            msg = process_exit_record(user_id)
+            reply_message = TextSendMessage(text=msg)
+            
+        # --- センサー情報 ---
         elif received_text == "気温":
             if sensor_data:
-                 latest = sensor_data[-1]
-                 reply_message = f"現在の気温は {latest.get('temperature')}℃ です。"
+                latest = sensor_data[-1]
+                reply_message = TextSendMessage(text=f"現在の気温は {latest.get('temperature')}℃ です。")
             else:
-                 reply_message = "センサーデータがまだありません。"
-            # 🚨 一時退出
-        elif received_text == "一時退出":
-            # process_temporary_exit は学生IDを紐付けテーブルから取得して処理を実行
-            reply_message = process_temporary_exit(user_id) 
-            
-        # 🚨 復帰
-        elif received_text == "戻りました":
-            reply_message = process_return_from_exit(user_id)
-            
-        # 🚨 最終退室
-        elif received_text == "最終退室":
-            # process_exit_record は退室時刻を記録してセッションを終了
-            reply_message = process_exit_record(user_id)
-            
-        # 🚨 以前の "退室" コマンドも一応残しておく（クイックリプライでは「最終退室」を使う）
-        elif received_text == "退室":
-            reply_message = process_exit_record(user_id)         
-        else:
-            reply_message = f"「{received_text}」を受け取りました。"
+                reply_message = TextSendMessage(text="センサーデータがまだありません。")
 
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=reply_message, quick_reply=quick_reply_buttons)
-        )
+        # ==========================================
+        # 5. 欠席・遅刻連絡の保存処理
+        # ==========================================
+        elif received_text.startswith("欠席連絡") or received_text.startswith("遅刻連絡:"):
+            # ID取得
+            student_id = get_student_id_from_line_user(user_id)
+            if student_id is None:
+                reply_message = TextSendMessage(text="⚠️ 学生IDが登録されていません。\n「登録:学生ID」で紐付けてください。")
+            else:
+                report_type = "欠席" if received_text.startswith("欠席連絡") else "遅刻"
+                try:
+                    # "遅刻連絡:電車遅延" のように : で区切る
+                    reason = received_text.split(":", 1)[1].strip()
+                    if not reason: raise IndexError
+                    
+                    # DBに保存
+                    new_report = ReportRecord(
+                        student_id=student_id,
+                        report_type=report_type,
+                        reason=reason,
+                        report_date=datetime.now(),
+                        is_resolved=False
+                    )
+                    db.session.add(new_report)
+                    db.session.commit()
+                    
+                    student = 学生.query.get(student_id)
+                    reply_message = TextSendMessage(
+                        text=f"📢 {student.学生名}さん、{report_type}連絡を受け付けました。\n理由: {reason}\n管理者に通知されます。"
+                    )
+                except IndexError:
+                    reply_message = TextSendMessage(
+                        text=f"❌ 理由が入力されていません。\n例: 「{report_type}連絡:風邪のため」"
+                    )
+
+        # --- その他のメッセージ ---
+        else:
+            # 該当しないメッセージには反応しない（またはヘルプを出す）
+            # reply_message = TextSendMessage(text="メニューから操作を選んでください。")
+            pass
+
+        # ==========================================
+        # 6. 返信実行
+        # ==========================================
+        if reply_message:
+            line_bot_api.reply_message(event.reply_token, reply_message)
 
 # ----------------------------------------------------------------------
 # 11. 学生専用ポータル (Student Portal)
