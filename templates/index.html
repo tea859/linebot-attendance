@@ -3,243 +3,330 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>出席管理システム - ダッシュボード</title>
+    <title>管理者ダッシュボード</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <style>
-        /* カスタムスタイル */
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc; /* Slate-50 */
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+            color: #1e293b;
+        }
+
+        /* メインカード（白背景・影付き） */
+        .dashboard-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+        }
+
+        /* 機能カード（クリックできるやつ） */
         .feature-card {
-            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            transform: translateY(0);
+            background: white;
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-card::before {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            opacity: 0;
+            transition: opacity 0.3s;
         }
         .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 20px -8px rgba(59, 130, 246, 0.15);
+            border-color: #e0e7ff;
         }
-        .student-item {
-            transition: background-color 0.15s;
-        }
-        .student-item:hover {
-            background-color: #eef5ff;
-        }
+        .feature-card:hover::before { opacity: 1; }
         
-        /* ★★★ script.jsで使うスタイル ★★★ */
-        /* テーブルの sticky header のため */
-        .sticky-header {
-            position: sticky;
-            top: 0;
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-        /* 在室・退出のバッジ */
-        .status-badge {
-            display: inline-flex;
-            padding: 0.25rem 0.75rem;
+
+        /* テーブル */
+        .status-table th {
+            background-color: #f1f5f9;
+            color: #64748b;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
             font-size: 0.75rem;
-            font-weight: 600;
-            line-height: 1.25;
+        }
+        .status-table tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        /* バッジ */
+        .status-badge {
+            padding: 0.25rem 0.75rem;
             border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.025em;
         }
-        .status-在室 {
-            background-color: #d1fae5; /* green-100 */
-            color: #065f46; /* green-800 */
+        .status-在室 { background-color: #dcfce7; color: #166534; }
+        .status-退出 { background-color: #fee2e2; color: #991b1b; }
+        .status-一時退出中 { background-color: #fef9c3; color: #854d0e; }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .status-退出 {
-            background-color: #fee2e2; /* red-100 */
-            color: #991b1b; /* red-800 */
-        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
     </style>
 </head>
-<body class="min-h-screen p-4 sm:p-8">
+<body class="pb-20">
 
-    <div class="max-w-7xl mx-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                <div class="p-4 mb-6 rounded-lg 
-                    {% if category == 'success' %} bg-green-100 text-green-700 border border-green-400
-                    {% elif category == 'error' %} bg-red-100 text-red-700 border border-red-400
-                    {% else %} bg-blue-100 text-blue-700 border border-blue-400
-                    {% endif %}" role="alert">
-                    <p>{{ message }}</p>
+                <div class="animate-fade-in mb-6 p-4 rounded-xl shadow-sm border flex items-start gap-3
+                    {% if category == 'success' %} bg-emerald-50 text-emerald-800 border-emerald-200
+                    {% elif category == 'error' %} bg-rose-50 text-rose-800 border-rose-200
+                    {% else %} bg-blue-50 text-blue-800 border-blue-200
+                    {% endif %}">
+                    <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %} mt-1"></i>
+                    <p class="font-medium">{{ message }}</p>
                 </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <header class="bg-white rounded-xl shadow-lg p-6 mb-8 border-b-4 border-blue-500 flex justify-between items-center">
-            <div class="flex-shrink">
-                <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900">
-                    出席管理システム
-                </h1>
-                <p class="text-gray-500 mt-1">すべての機能と学生情報にここからアクセスできます。</p>
+        <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+            <div class="flex items-center gap-4">
+                <div class="bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-3 rounded-xl shadow-lg">
+                    <i class="fas fa-school text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">出席管理システム</h1>
+                    <p class="text-slate-500 text-sm">管理者ダッシュボード</p>
+                </div>
             </div>
             
-            <div>
+            <div class="flex items-center gap-4">
                 {% if current_user.is_authenticated %}
-                    <div class="text-right mb-2">
-                        <span class="text-gray-600 text-sm">ようこそ, {{ current_user.username }} さん</span>
-                        <a href="/logout" 
-                           class="ml-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition duration-150">
-                            ログアウト
-                        </a>
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs text-slate-400 font-bold uppercase">LOGIN USER</p>
+                        <p class="text-sm font-bold text-indigo-600">{{ current_user.username }}</p>
                     </div>
+                    <div class="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
                     
-                    <form method="POST" action="/restore_schedule" 
-                          onsubmit="return confirm('本当に時間割を初期のデフォルト状態に戻しますか？');"
-                          class="mt-2 text-right">
-                        <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm shadow-md transition duration-150 whitespace-nowrap">
-                            時間割を元に戻す
+                    <form method="POST" action="/restore_schedule" onsubmit="return confirm('初期状態に戻しますか？');">
+                        <button type="submit" class="text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2">
+                            <i class="fas fa-undo"></i> 時間割リセット
                         </button>
                     </form>
-
+                    
+                    <a href="/logout" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-md transition flex items-center gap-2">
+                        <i class="fas fa-sign-out-alt"></i> ログアウト
+                    </a>
                 {% else %}
-                    <a href="/login" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700">
+                    <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg transition">
                         管理者ログイン
                     </a>
                 {% endif %}
             </div>
         </header>
 
-        <h2 class="text-2xl font-bold text-gray-700 mb-4">メイン機能</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-            <a href="file:///Y:/%E6%A8%99%E6%BA%96%E8%AA%B2%E9%A1%8C%E2%85%A0%E9%81%A0%E9%9A%94%E7%9B%A3%E8%A6%96/%E7%AC%AC3%E7%8F%AD_%E9%80%B1%E5%A0%B1%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0/test2.html" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700">
-            	顔 
-            </a>    
-        {% for link in links %}
-            <a href="{{ link.url }}" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-blue-500 flex flex-col items-center text-center hover:border-blue-700">
-                <div class="text-4xl mb-3 text-blue-600">
-                    {% if "記録" in link.name %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-                    {% elif "時間割表示" in link.name %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h.01M15 12h.01M12 16h.01M9 16h.01M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m8 2H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>
-                    {% elif "編集" in link.name or "管理" in link.name %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H8v-3.828l7.586-7.586z"/></svg>
-                    {% else %}
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                    {% endif %}
-                </div>
-                <span class="text-lg font-semibold text-gray-800 relative">
-                    {{ link.name }}
-
-                    {% if link.name == "📢 遅刻・欠席連絡 掲示板" %}
-                        
-                        <span id="alert-badge"
-                            class="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                            {{ unresolved_alerts_count }}
-                        </span>
-                    
-                    {% endif %}
-                </span>
-                </a>
-        {% endfor %}
-
-            {% if current_user.is_authenticated %}
-            <a href="/report_summary" class="feature-card bg-white p-6 rounded-xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center text-center hover:border-indigo-700">
-                <div class="text-4xl mb-3 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                </div>
-                <span class="text-lg font-semibold text-gray-800">授業別出席管理表</span>
-            </a>
-            {% endif %}
-	    </div>
-		
-		<h2 class="text-2xl font-bold text-gray-700 mb-4 mt-8">🍓 RasPi 400 指令センター</h2>
-		<div class="bg-white p-6 rounded-xl shadow-lg border border-red-400">
-		    <p class="text-gray-600 mb-4">カメラ側（Raspberry Pi）に対して、認証リセットや在不在確認の指令を出します。</p>
-		    <div class="flex space-x-4">
-		        <button onclick="sendCommand('CHECK')" 
-		                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md">
-		            在不在確認指令 (CHECK)
-		        </button>
-		        <button onclick="sendCommand('RESET')" 
-		                class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md">
-		            認証状態リセット (RESET)
-		        </button>
-		    </div>
-		    <div id="command-feedback" class="mt-4 text-center font-medium"></div>
-		</div>
-		<script>
-		    function sendCommand(commandType) {
-		        const feedback = document.getElementById('command-feedback');
-		        feedback.textContent = `指令 ${commandType} を送信中...`;
-		        
-		        fetch('/api/set_command', {
-		            method: 'POST',
-		            headers: {
-		                'Content-Type': 'application/json',
-		            },
-		            body: JSON.stringify({ command_type: commandType })
-		        })
-		        .then(response => response.json())
-		        .then(data => {
-		            if (data.success) {
-		                feedback.textContent = `✅ 指令 ${commandType} がキューに登録されました。`;
-		                feedback.classList.remove('text-red-500');
-		                feedback.classList.add('text-green-600');
-		            } else {
-		                feedback.textContent = `❌ 指令送信エラー: ${data.message}`;
-		                feedback.classList.remove('text-green-600');
-		                feedback.classList.add('text-red-500');
-		            }
-		        })
-		        .catch(error => {
-		            feedback.textContent = `❌ ネットワークエラー: ${error}`;
-		            feedback.classList.remove('text-green-600');
-		            feedback.classList.add('text-red-500');
-		        });
-		    }
-		</script>
-        <h2 class="text-2xl font-bold text-gray-700 mb-4">学生別出席サマリー</h2>
-        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+        <div class="mb-12">
+            <h2 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                <i class="fas fa-th-large text-indigo-500"></i> メイン機能
+            </h2>
             
-            <p class="text-gray-500 mb-4">
-                サマリーを確認したい学生を選択してください (デフォルト: 第1期を表示)。
-            </p>
-            
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-3 student-list max-h-[400px] overflow-y-auto p-2 border border-gray-200 rounded-lg">
-                {% for student_id, student_name in students %}
-                <a href="/my_attendance?student_id={{ student_id }}&kiki=1" class="student-item block p-3 rounded-lg text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 hover:bg-blue-50 hover:text-blue-700 transition duration-150">
-                    <span class="block truncate">{{ student_name }}</span>
-                    <span class="text-xs text-gray-400">ID: {{ student_id }}</span>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-6">
+                {% for link in links %}
+                <a href="{{ link.url }}" class="feature-card animate-fade-in" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
+                    <div class="feature-icon">
+                        {% if "記録" in link.name %}<i class="fas fa-clipboard-check"></i>
+                        {% elif "時間割表示" in link.name %}<i class="far fa-calendar-alt"></i>
+                        {% elif "編集" in link.name %}<i class="fas fa-edit"></i>
+                        {% elif "学生" in link.name %}<i class="fas fa-users-cog"></i>
+                        {% elif "科目" in link.name %}<i class="fas fa-book"></i>
+                        {% elif "掲示板" in link.name %}<i class="fas fa-bullhorn"></i>
+                        {% else %}<i class="fas fa-cogs"></i>{% endif %}
+                    </div>
+                    <span class="font-bold text-slate-700">{{ link.name }}</span>
                 </a>
                 {% endfor %}
                 
-                {% if not students %}
-                <p class="col-span-full text-center text-red-500 p-4">?? 学生データがDBにありません。</p>
+                {% if current_user.is_authenticated %}
+                <a href="/report_summary" class="feature-card animate-fade-in" style="animation-delay: 0.3s;">
+                    <div class="feature-icon"><i class="fas fa-chart-bar"></i></div>
+                    <span class="font-bold text-slate-700">授業別レポート</span>
+                </a>
                 {% endif %}
             </div>
         </div>
-	<div class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">現在の環境</h2>
-            
-            <div id="sensor-data">
-                <p class="text-gray-500">センサーデータを読み込み中...</p>
-            </div>
-        </div>
-        <h2 class="text-2xl font-bold text-gray-700 mb-4 mt-12">リアルタイム在室状況</h2>
-        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-            <div class="overflow-y-auto max-h-[500px]">
-                <table id="status-table" class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50 sticky-header">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生名</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状態</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">教室</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">入室時刻</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">滞在時間</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        <tr>
-                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                                在室状況を読み込み中...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        </div> <script src="{{ url_for('static', filename='script.js') }}"></script>
 
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="space-y-8">
+                
+                <div class="dashboard-card p-6 animate-fade-in" style="animation-delay: 0.4s;">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-700"><i class="fas fa-thermometer-half text-rose-500 mr-2"></i> 現在の環境</h3>
+                        <span class="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded">LIVE</span>
+                    </div>
+                    <div id="sensor-data" class="grid grid-cols-2 gap-4">
+                        <div class="bg-rose-50 p-3 rounded-xl text-center">
+                            <p class="text-xs text-rose-600 font-bold mb-1">温度</p>
+                            <p class="text-2xl font-black text-rose-700" id="temp-val">--.-<small>°C</small></p>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-xl text-center">
+                            <p class="text-xs text-blue-600 font-bold mb-1">湿度</p>
+                            <p class="text-2xl font-black text-blue-700" id="humid-val">--.-<small>%</small></p>
+                        </div>
+                        <p class="col-span-2 text-center text-xs text-slate-400 mt-1" id="sensor-time">データ取得中...</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-card p-6 animate-fade-in" style="animation-delay: 0.5s;">
+                    <h3 class="font-bold text-slate-700 mb-4"><i class="fas fa-user-graduate text-indigo-500 mr-2"></i> 学生別サマリー</h3>
+                    <p class="text-xs text-slate-500 mb-4">クリックで詳細レポートを表示します。</p>
+                    
+                    <div class="grid grid-cols-2 gap-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                        {% for student_id, student_name in students %}
+                        <a href="/my_attendance?student_id={{ student_id }}&kiki=1" 
+                           class="block p-3 rounded-lg bg-slate-50 border border-slate-100 hover:bg-white hover:border-indigo-300 hover:shadow-md transition text-center group">
+                            <span class="block font-bold text-slate-700 text-sm group-hover:text-indigo-600 truncate">{{ student_name }}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">{{ student_id }}</span>
+                        </a>
+                        {% else %}
+                        <p class="col-span-full text-center text-slate-400 text-sm py-4">学生データなし</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="dashboard-card overflow-hidden h-full animate-fade-in" style="animation-delay: 0.6s;">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <h3 class="font-bold text-slate-700 flex items-center gap-2">
+                            <i class="fas fa-door-open text-emerald-500"></i> リアルタイム在室状況
+                        </h3>
+                        <button onclick="updateStatus()" class="text-slate-400 hover:text-indigo-600 transition">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-y-auto max-h-[600px]">
+                        <table id="status-table" class="min-w-full divide-y divide-slate-100 status-table">
+                            <thead class="sticky top-0 bg-white shadow-sm z-10">
+                                <tr>
+                                    <th class="px-6 py-4 text-left">学生名</th>
+                                    <th class="px-6 py-4 text-left">状態</th>
+                                    <th class="px-6 py-4 text-left">教室</th>
+                                    <th class="px-6 py-4 text-left">入室時刻</th>
+                                    <th class="px-6 py-4 text-left">滞在時間</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50 bg-white" id="status-tbody">
+                                <tr>
+                                    <td colspan="5" class="px-6 py-12 text-center text-slate-400">
+                                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i><br>
+                                        データを読み込んでいます...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // 1. センサー情報の更新
+        function updateSensor() {
+            fetch('/api/sensor_status')
+                .then(res => res.json())
+                .then(data => {
+                    if(data.temperature) {
+                        document.getElementById('temp-val').innerHTML = `${data.temperature}<small>°C</small>`;
+                        document.getElementById('humid-val').innerHTML = `${data.humidity}<small>%</small>`;
+                        document.getElementById('sensor-time').textContent = "最終更新: " + data.timestamp;
+                    } else {
+                        document.getElementById('sensor-time').textContent = "センサーデータ待機中...";
+                    }
+                })
+                .catch(err => console.error("Sensor Error:", err));
+        }
+
+        // 2. 在室状況の更新
+        function updateStatus() {
+            fetch('/api/status')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('status-tbody');
+                    tbody.innerHTML = ""; // クリア
+
+                    data.students.forEach(s => {
+                        // バッジの色決定
+                        let badgeClass = "bg-slate-100 text-slate-500";
+                        if(s.status === "在室") badgeClass = "status-在室";
+                        else if(s.status === "退出") badgeClass = "status-退出";
+                        else if(s.status === "一時退出中") badgeClass = "status-一時退出中";
+
+                        const row = `
+                            <tr class="transition hover:bg-slate-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="font-bold text-slate-700">${s.name}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="status-badge ${badgeClass}">${s.status}</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                                    ${s.room || '-'}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">
+                                    ${s.entry ? s.entry.split(' ')[1] : '-'}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 font-mono">
+                                    ${s.duration || '-'}
+                                </td>
+                            </tr>
+                        `;
+                        tbody.insertAdjacentHTML('beforeend', row);
+                    });
+                })
+                .catch(err => console.error("Status Error:", err));
+        }
+
+        // 初回実行 & 定期実行
+        updateSensor();
+        updateStatus();
+        setInterval(updateSensor, 10000); // 10秒ごと
+        setInterval(updateStatus, 5000);  // 5秒ごと
+    </script>
 </body>
 </html>
