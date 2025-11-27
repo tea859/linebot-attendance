@@ -275,47 +275,125 @@ def schedule():
 
 @app.route("/api/status")
 def api_status():
-    conn = sqlite3.connect("zaiseki.db")
-    cur = conn.cursor()
+    """(ダッシュボードAPI) リアルタイム在室状況を返す + 自動出席チェック"""
+    
+    # 1. まず「在室中」の学生リストを取得 (学生ID, 教室名, 入室時刻, 備考)
+    # 退出時刻が NULL (None) のものだけを取得
+    active_sessions_data = db.session.query(
+        在室履歴.学生ID, 教室.教室名, 在室履歴.入室時刻, 在室履歴.備考 
+    ).outerjoin(教室, 在室履歴.教室ID == 教室.教室ID)\
+     .filter(在室履歴.退室時刻 == None).all()
+    
+    # (在室中のIDだけSet型にしておく)
+    active_student_ids = {s[0] for s in active_sessions_data}
 
-    cur.execute("SELECT 学生ID, 学生名 FROM 学生")
-    all_students = cur.fetchall()
+    # --- ▼▼▼ 自動出席チェック機能 ▼▼▼ ---
+    # (在室中なのに出席登録がない場合、自動で出席にする便利機能)
+    if active_student_ids: 
+        try:
+            now = datetime.now()
+            today_str = f"{now.year}/{now.month}/{now.day}"
+            
+            # 今が授業中か確認
+            plan_row = 授業計画.query.get(today_str)
+            if plan_row:
+                kiki, yobi_code = plan_row.期, plan_row.授業曜日
+                period_row = TimeTable.query.filter(
+                    TimeTable.開始時刻 <= now.time(),
+                    TimeTable.終了時刻 >= now.time()
+                ).first()
+                
+                if period_row:
+                    current_period = period_row.時限
+                    yobi_str = YOBI_MAP_REVERSE.get(yobi_code)
+                    class_row = 時間割.query.filter_by(
+                        学期=str(kiki), 曜日=yobi_str, 時限=current_period
+                    ).first()
+                    
+                    if class_row and class_row.授業ID != 0:
+                        class_id = class_row.授業ID
+                        today_date = now.date()
 
-    cur.execute("""
-        SELECT 学生ID, 教室.教室名, 入室時刻
-        FROM 在室履歴
-        JOIN 教室 ON 在室履歴.教室ID = 教室.教室ID
-        WHERE 退室時刻 IS NULL
-    """)
-    active_rows = cur.fetchall()
+                        # 既に記録済みの学生を除外
+                        existing_records = db.session.query(出席記録.学生ID).filter(
+                            出席記録.学生ID.in_(active_student_ids), 
+                            出席記録.授業ID == class_id,
+                            出席記録.時限 == current_period,
+                            出席記録.出席日付 == today_date
+                        ).all()
+                        recorded_student_ids = {r[0] for r in existing_records}
 
+                        # 未記録の学生を登録
+                        students_to_mark = active_student_ids - recorded_student_ids
+                        new_records = []
+                        for student_id in students_to_mark:
+                            status = 判定(current_period, now) 
+                            new_records.append(出席記録(
+                                学生ID=student_id, 
+                                授業ID=class_id, 
+                                出席時刻=now,
+                                状態=status, 
+                                時限=current_period
+                            ))
+                        
+                        if new_records:
+                            db.session.add_all(new_records)
+                            db.session.commit()
+                            # 必要ならアラートチェック
+                            for record in new_records:
+                                check_and_send_alert(record.学生ID, record.授業ID)
+
+        except Exception as e:
+            db.session.rollback()
+            print(f"自動出席エラー: {e}")
+    
+    all_students = 学生.query.order_by(学生.学生ID).all()
+    
     now = datetime.now()
     active_map = {}
-    for sid, room_name, 入室時刻 in active_rows:
-        入室 = datetime.strptime(入室時刻, "%Y-%m-%d %H:%M:%S")
-        滞在秒 = int((now - 入室).total_seconds())
-        hh = 滞在秒 // 3600
-        mm = (滞在秒 % 3600) // 60
-        ss = 滞在秒 % 60
-        duration = f"{hh:02}:{mm:02}:{ss:02}"
-        active_map[sid] = (room_name, 入室時刻, duration)
+    
+    # 在室データを辞書に変換
+    for sid, room_name, 入室時刻, 備考 in active_sessions_data:
+        try:
+            # 滞在時間の計算
+            滞在秒 = int((now - 入室時刻).total_seconds())
+            hh = 滞在秒 // 3600
+            mm = (滞在秒 % 3600) // 60
+            ss = 滞在秒 % 60
+            duration = f"{hh:02}:{mm:02}:{ss:02}"
+            
+            # ステータス判定 (一時退出かどうか)
+            status = "一時退出中" if 備考 == "一時退出中" else "在室"
+    
+            active_map[sid] = {
+                "status": status,
+                "room": room_name or '教室不明', 
+                "entry": 入室時刻.strftime("%Y-%m-%d %H:%M:%S"), 
+                "duration": duration
+            }
+        except Exception:
+             active_map[sid] = {"status": "エラー", "room": "", "entry": "", "duration": ""}
 
+    # 全学生のリストを作成 (出席していない人は「退出」)
     result = []
-    for sid, name in all_students:
-        if sid in active_map:
-            room, time, dur = active_map[sid]
+    for s in all_students:
+        if s.学生ID in active_map:
+            session_data = active_map[s.学生ID]
             result.append({
-                "name": name, "status": "在室",
-                "room": room, "entry": time, "duration": dur
+                "name": s.学生名, 
+                "status": session_data["status"], 
+                "room": session_data["room"], 
+                "entry": session_data["entry"], 
+                "duration": session_data["duration"]
             })
         else:
             result.append({
-                "name": name, "status": "退出",
+                "name": s.学生名, "status": "退出",
                 "room": "", "entry": "", "duration": ""
             })
 
-    conn.close()
     return jsonify({"students": result})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, threaded=True)
+
