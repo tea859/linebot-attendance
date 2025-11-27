@@ -1170,6 +1170,9 @@ def logout():
 @app.route("/")
 @login_required
 def index():
+    if current_user.get_id().startswith('student-'):
+        flash("管理者権限がありません。", "error")
+        return redirect(url_for('my_portal'))
     students = 学生.query.order_by(学生.学生ID).all()
     
     message = None
