@@ -11,19 +11,16 @@
     <style>
         body {
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f1f5f9; /* Slate-100 */
+            background-color: #f1f5f9;
             background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
             background-size: 20px 20px;
         }
-
-        /* グラスモーフィズム（ガラス風）カード */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.5);
             box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
         }
-
         /* 時間割テーブル */
         .schedule-table {
             width: 100%;
@@ -43,7 +40,6 @@
             color: #64748b;
             font-size: 0.85rem;
             font-weight: 700;
-            letter-spacing: 0.05em;
         }
         .schedule-table td {
             height: 100px;
@@ -51,40 +47,26 @@
             font-size: 0.9rem;
             transition: all 0.2s;
         }
-        .schedule-table td:hover {
-            background-color: #f8fafc;
-        }
-        .schedule-table td:last-child, .schedule-table th:last-child {
-            border-right: none;
-        }
-        .schedule-table tr:last-child td {
-            border-bottom: none;
-        }
-        
-        /* 今日の列ハイライト */
+        .schedule-table td:hover { background-color: #f8fafc; }
+        .schedule-table td:last-child, .schedule-table th:last-child { border-right: none; }
+        .schedule-table tr:last-child td { border-bottom: none; }
         .today-col {
-            background-color: #eff6ff !important; /* Blue-50 */
+            background-color: #eff6ff !important;
             border-bottom: 2px solid #3b82f6;
         }
-
-        /* アニメーション: フェードイン */
+        /* アニメーション */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
         
-        /* パルスアニメーション（赤） */
-        @keyframes pulse-red-glow {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        @keyframes pulse-indigo {
+            0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(79, 70, 229, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); }
         }
-        .animate-pulse-red {
-            animation: pulse-red-glow 2s infinite;
-        }
+        .animate-pulse-indigo { animation: pulse-indigo 2s infinite; }
     </style>
 </head>
 <body class="text-slate-800 pb-20">
@@ -133,50 +115,52 @@
         <div class="glass-card rounded-2xl overflow-hidden animate-fade-in" style="animation-delay: 0.1s;">
             <div class="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center">
                 <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
-                    <i class="fas fa-camera text-indigo-500"></i> カメラ出席登録
+                    <i class="fas fa-satellite-dish text-indigo-500"></i> PCカメラ認証
                 </h2>
-                <div class="bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-2">
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span id="clock" class="font-mono text-sm font-bold text-slate-600">--:--:--</span>
-                </div>
+                <span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded font-bold">REMOTE MODE</span>
             </div>
             
-            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                <div class="relative rounded-xl overflow-hidden bg-black shadow-2xl aspect-video group">
-                    <video id="userVideo" autoplay muted playsinline class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition"></video>
-                    <canvas id="userCanvas" class="hidden"></canvas>
-                    
-                    <div id="cameraStatus" class="absolute top-3 left-3 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/20">
-                        <span class="w-2 h-2 bg-slate-400 rounded-full" id="statusDot"></span>
-                        <span id="statusText" class="font-medium">カメラ待機中...</span>
-                    </div>
-                    <div class="absolute inset-0 border-[3px] border-white/20 rounded-xl pointer-events-none"></div>
-                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="w-48 h-48 border-2 border-white/30 rounded-lg border-dashed"></div>
-                    </div>
-                </div>
-        
-                <div class="flex flex-col justify-center space-y-6">
-                    <div class="space-y-2">
-                        <h3 class="text-xl font-bold text-slate-800">出席を登録する</h3>
-                        <p class="text-sm text-slate-500 leading-relaxed">
-                            授業開始の前後になるとボタンが有効になります。<br>
-                            カメラに顔を向けて、下記のボタンを押してください。
+            <div class="p-8 text-center">
+                
+                <div id="step1">
+                    <div class="mb-8">
+                        <div class="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-500 text-3xl">
+                            <i class="fas fa-camera"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-slate-800 mb-2">出席登録を始める</h3>
+                        <p class="text-slate-500">
+                            下のボタンを押すと、PCのカメラが自動で起動します。<br>
+                            <span class="text-xs text-slate-400 font-bold">※ Pythonプログラム(camera_client.py)を起動しておいてください</span>
                         </p>
                     </div>
-                    
-                    <button id="authButton" onclick="captureAndAuth()" disabled
-                        class="w-full py-4 px-6 rounded-xl font-bold text-white text-lg shadow-lg transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl
-                               bg-slate-300 cursor-not-allowed flex items-center justify-center gap-3 group">
-                        <i class="fas fa-clock text-slate-500 group-hover:animate-spin"></i>
-                        <span class="text-slate-500">授業時間外です</span>
+
+                    <button onclick="startRemoteAuth()" 
+                        class="py-4 px-10 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xl font-bold rounded-full shadow-xl shadow-indigo-200 transform transition hover:-translate-y-1 flex items-center justify-center gap-3 mx-auto animate-pulse-indigo">
+                        <i class="fas fa-power-off"></i> 認証スタート
                     </button>
-                    
-                    <div id="resultMsg" class="hidden p-4 rounded-xl text-sm font-bold text-center transition-all duration-500"></div>
                 </div>
+
+                <div id="step2" class="hidden py-4">
+                    <div class="flex justify-center mb-6">
+                        <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-indigo-600"></div>
+                    </div>
+                    <h3 class="text-2xl font-bold text-indigo-600 mb-2">PCと通信中...</h3>
+                    <p class="text-slate-500 text-lg animate-pulse">PCのカメラを見てください！</p>
+                </div>
+
+                <div id="step3" class="hidden py-4">
+                    <div class="text-7xl text-emerald-500 mb-6 animate-bounce">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h2 class="text-3xl font-bold text-emerald-600 mb-2">出席完了！</h2>
+                    <p class="text-slate-600 mb-8 text-lg">サーバーに登録されました。</p>
+                    <button onclick="location.reload()" class="text-indigo-500 font-bold underline hover:text-indigo-700 text-lg">
+                        画面を更新する
+                    </button>
+                </div>
+
             </div>
         </div>
-
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in" style="animation-delay: 0.2s;">
             
             <div class="glass-card rounded-2xl p-6 h-full">
@@ -305,181 +289,59 @@
 
     </div>
 
-    <div id="reAuthModal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center animate-fade-in">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm mx-4 w-full relative overflow-hidden animate-pulse-red">
-            <div class="absolute top-0 left-0 w-full h-2 bg-rose-500"></div>
-            
-            <div class="w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-6 text-rose-500 text-4xl">
-                <i class="fas fa-user-clock"></i>
-            </div>
-            
-            <h2 class="text-2xl font-black text-slate-800 mb-2">在席確認</h2>
-            <p class="text-slate-500 mb-8 text-sm">
-                授業への参加を確認します。<br>
-                60秒以内に認証してください。
-            </p>
-            
-            <div class="text-6xl font-mono font-black text-rose-500 mb-8 tracking-tighter" id="countdown">60</div>
-            
-            <button onclick="captureAndAuth(true)" 
-                class="w-full py-4 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-bold rounded-xl shadow-lg transform transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2">
-                <i class="fas fa-fingerprint"></i> 今すぐ認証する
-            </button>
-        </div>
-    </div>
-
     <script>
-        const video = document.getElementById('userVideo');
-        const canvas = document.getElementById('userCanvas');
-        const authBtn = document.getElementById('authButton');
-        const statusDot = document.getElementById('statusDot');
-        const statusText = document.getElementById('statusText');
-        const resultMsg = document.getElementById('resultMsg');
-        const clockEl = document.getElementById('clock');
+        function startRemoteAuth() {
+            // 1. 画面を「待機中」に切り替え
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
 
-        // 時限設定
-        const CLASS_TIMES = [
-            { p: 1, start: "08:50", end: "10:30" },
-            { p: 2, start: "10:35", end: "12:15" },
-            { p: 3, start: "13:00", end: "14:40" },
-            { p: 4, start: "14:45", end: "16:25" },
-            { p: 5, start: "16:40", end: "18:20" }
-        ];
-
-        setInterval(() => {
-            const now = new Date();
-            clockEl.textContent = now.toLocaleTimeString('ja-JP');
-            checkTimeAndEnableButton();
-        }, 1000);
-
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
-                video.srcObject = stream;
-                statusDot.classList.remove('bg-slate-400');
-                statusDot.classList.add('bg-emerald-400', 'animate-pulse');
-                statusText.textContent = "カメラ稼働中";
-                checkTimeAndEnableButton();
-            } catch (err) {
-                console.error(err);
-                statusDot.classList.remove('bg-slate-400');
-                statusDot.classList.add('bg-rose-500');
-                statusText.textContent = "カメラエラー";
-            }
-        }
-        startCamera();
-
-        function checkTimeAndEnableButton() {
-            if (!document.getElementById('reAuthModal').classList.contains('hidden')) return;
-
-            const now = new Date();
-            const currentMins = now.getHours() * 60 + now.getMinutes();
-            let isClassTime = false;
-            let targetPeriod = 0;
-
-            CLASS_TIMES.forEach(t => {
-                const [sh, sm] = t.start.split(":").map(Number);
-                const [eh, em] = t.end.split(":").map(Number);
-                const startMins = sh * 60 + sm;
-                const endMins = eh * 60 + em;
-                if (currentMins >= (startMins - 20) && currentMins <= (endMins + 20)) {
-                    isClassTime = true;
-                    targetPeriod = t.p;
-                }
-            });
-
-            if (isClassTime) {
-                if (authBtn.disabled && !authBtn.innerHTML.includes("送信中")) {
-                    authBtn.disabled = false;
-                    // スタイルをActive用に変更
-                    authBtn.className = "w-full py-4 px-6 rounded-xl font-bold text-white text-lg shadow-lg shadow-indigo-200 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-2xl bg-gradient-to-r from-indigo-600 to-violet-600 flex items-center justify-center gap-3 group";
-                    authBtn.innerHTML = `<i class="fas fa-camera"></i><span>第${targetPeriod}限の出席を登録する</span>`;
-                }
-            } else {
-                authBtn.disabled = true;
-                authBtn.className = "w-full py-4 px-6 rounded-xl font-bold text-white text-lg shadow-none bg-slate-300 cursor-not-allowed flex items-center justify-center gap-3";
-                authBtn.innerHTML = `<i class="fas fa-clock text-slate-500"></i><span class="text-slate-500">授業時間外です</span>`;
-            }
-        }
-
-        function captureAndAuth(isReAuth = false) {
-            if (!isReAuth) {
-                authBtn.disabled = true;
-                authBtn.className = "w-full py-4 px-6 rounded-xl font-bold text-white text-lg bg-indigo-400 cursor-wait flex items-center justify-center gap-3";
-                authBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>送信中...</span>`;
-            }
-            resultMsg.className = "hidden";
-
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            const imageData = canvas.toDataURL('image/jpeg', 0.8);
-
-            fetch('/api/portal_face_auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: imageData })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success' || data.status === 'info') {
-                    if (isReAuth) {
-                        document.getElementById('reAuthModal').classList.add('hidden');
-                        alert("✅ 確認完了！");
-                        scheduleNextCheck(); 
+            // 2. サーバーに命令を送る
+            fetch('/api/trigger_remote_auth', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if(data.status === 'success') {
+                        // 3. ポーリング開始
+                        pollForResult();
                     } else {
-                        resultMsg.textContent = data.message;
-                        resultMsg.className = "p-4 rounded-xl text-sm font-bold text-center bg-emerald-100 text-emerald-700 border border-emerald-300 block shadow-sm animate-fade-in";
-                        authBtn.innerHTML = `<i class="fas fa-check"></i><span>登録完了</span>`;
-                        authBtn.className = "w-full py-4 px-6 rounded-xl font-bold text-white text-lg bg-emerald-500 cursor-default flex items-center justify-center gap-3 shadow-md";
-                        scheduleNextCheck();
+                        alert("エラー: " + data.message);
+                        resetScreen();
                     }
-                } else {
-                    throw new Error(data.message);
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                resultMsg.textContent = "エラー: " + err.message;
-                resultMsg.className = "p-4 rounded-xl text-sm font-bold text-center bg-rose-100 text-rose-700 border border-rose-300 block shadow-sm animate-fade-in";
-                if (!isReAuth) {
-                    authBtn.disabled = false;
-                    authBtn.className = "w-full py-4 px-6 rounded-xl font-bold text-white text-lg bg-rose-500 hover:bg-rose-600 shadow-lg transition flex items-center justify-center gap-3";
-                    authBtn.innerHTML = `<i class="fas fa-redo"></i><span>再試行する</span>`;
-                }
-            });
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("通信エラーが発生しました");
+                    resetScreen();
+                });
         }
 
-        let checkTimer = null;
-        function scheduleNextCheck() {
-            const randomInterval = Math.floor(Math.random() * (2400000 - 900000) + 900000);
-            clearTimeout(checkTimer);
-            checkTimer = setTimeout(triggerReAuth, randomInterval);
-        }
-
-        function triggerReAuth() {
-            if (authBtn.disabled && authBtn.innerHTML.includes("時間外")) {
-                scheduleNextCheck();
-                return;
-            }
-            const modal = document.getElementById('reAuthModal');
-            const countdownEl = document.getElementById('countdown');
-            let timeLeft = 60;
-            modal.classList.remove('hidden');
-            
-            const timerInterval = setInterval(() => {
-                timeLeft--;
-                countdownEl.textContent = timeLeft;
-                if (modal.classList.contains('hidden')) clearInterval(timerInterval);
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    if (!modal.classList.contains('hidden')) {
-                        modal.classList.add('hidden');
-                        alert("⚠️ 応答なし");
-                    }
-                }
+        function pollForResult() {
+            const intervalId = setInterval(() => {
+                fetch('/api/check_remote_result')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            clearInterval(intervalId);
+                            document.getElementById('step2').classList.add('hidden');
+                            document.getElementById('step3').classList.remove('hidden');
+                        }
+                    })
+                    .catch(err => console.error("待機中エラー:", err));
             }, 1000);
+
+            // タイムアウト処理
+            setTimeout(() => {
+                clearInterval(intervalId);
+                if (document.getElementById('step3').classList.contains('hidden')) {
+                    alert("タイムアウト: PCからの応答がありませんでした。\nPythonプログラムが起動しているか確認してください。");
+                    resetScreen();
+                }
+            }, 30000); 
+        }
+
+        function resetScreen() {
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
         }
     </script>
 </body>
