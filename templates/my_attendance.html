@@ -6,7 +6,7 @@
     <title>個人別出席状況サマリー</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
     
     <style>
         body {
@@ -18,37 +18,64 @@
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        /* ドーナツチャート (CSSだけで描画) */
+        .donut-chart {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* 以下のbackgroundはインラインスタイルで上書きします */
+            background: conic-gradient(#e2e8f0 0%, #e2e8f0 100%); 
+        }
+        
+        /* 真ん中の白い穴 */
+        .donut-chart::before {
+            content: "";
+            position: absolute;
+            width: 84px;  /* リングの太さを調整 (100 - 84 = 16px) */
+            height: 84px;
+            background-color: white;
+            border-radius: 50%;
+        }
+
+        /* 真ん中の文字 */
+        .donut-text {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            line-height: 1;
         }
 
         .subject-card {
             background: white;
-            border-radius: 12px;
+            border-radius: 16px;
+            padding: 1.5rem;
             border: 1px solid #f1f5f9;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
         }
         .subject-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-            border-color: #e0e7ff;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+            border-color: #e2e8f0;
         }
 
-        /* プログレスバー */
-        .progress-bg {
-            background-color: #f1f5f9;
-            border-radius: 9999px;
-            height: 8px;
-            overflow: hidden;
-        }
-        .progress-fill {
-            height: 100%;
-            border-radius: 9999px;
-            transition: width 1s ease-in-out;
+        /* 統計ボックス */
+        .stat-box {
+            background-color: #f8fafc;
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #f1f5f9;
         }
 
         /* アニメーション */
@@ -61,11 +88,11 @@
 </head>
 <body class="pb-20">
 
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
         
-        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+        <header class="glass-card p-6 mb-8 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
             <div class="flex items-center gap-4">
-                <div class="bg-gradient-to-br from-emerald-500 to-teal-500 text-white p-3 rounded-xl shadow-lg">
+                <div class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-3 rounded-xl shadow-lg">
                     <i class="fas fa-chart-pie text-2xl"></i>
                 </div>
                 <div>
@@ -79,16 +106,16 @@
             </a>
         </header>
 
-        <nav class="flex space-x-2 mb-6 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s;">
+        <nav class="flex space-x-3 mb-8 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s;">
             {% for kiki_num in kikis %}
             <a href="/my_attendance?student_id={{ student_id }}&kiki={{ kiki_num }}" 
-               class="px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 flex-shrink-0
+               class="px-6 py-2.5 rounded-full font-bold text-sm transition-all duration-200 flex-shrink-0 flex items-center gap-2
                {% if kiki_num == selected_kiki %}
-                   bg-emerald-600 text-white shadow-lg shadow-emerald-200 transform scale-105
+                   bg-indigo-600 text-white shadow-md shadow-indigo-200 transform scale-105
                {% else %}
-                   bg-white text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 shadow-sm
+                   bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200
                {% endif %}">
-                第{{ kiki_num }}期
+               <i class="far fa-calendar"></i> 第{{ kiki_num }}期
             </a>
             {% endfor %}
         </nav>
@@ -96,66 +123,66 @@
         <main class="animate-fade-in" style="animation-delay: 0.2s;">
             
             {% if report_data %}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {% for row in report_data %}
-                    <div class="subject-card p-5 flex flex-col justify-between h-full">
-                        
-                        <div class="flex justify-between items-start mb-4">
-                            <h3 class="text-lg font-bold text-slate-700 leading-tight w-2/3">
+                    
+                    {% set color_class = "text-rose-500" %}
+                    {% set ring_color = "#f43f5e" %}
+                    {% if row.attendance_rate >= 80 %}
+                        {% set color_class = "text-emerald-500" %}
+                        {% set ring_color = "#10b981" %}
+                    {% elif row.attendance_rate >= 50 %}
+                        {% set color_class = "text-amber-500" %}
+                        {% set ring_color = "#f59e0b" %}
+                    {% endif %}
+
+                    <div class="subject-card flex flex-col h-full relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-1" style="background-color: {{ ring_color }};"></div>
+
+                        <div class="flex items-start justify-between mb-4">
+                            <h3 class="text-lg font-bold text-slate-700 leading-tight pr-2">
                                 {{ row.subject }}
                             </h3>
-                            <div class="text-right">
-                                <span class="text-3xl font-black 
-                                    {% if row.attendance_rate >= 80 %}text-emerald-500
-                                    {% elif row.attendance_rate >= 50 %}text-amber-500
-                                    {% else %}text-rose-500{% endif %}">
-                                    {{ row.attendance_rate }}<small class="text-sm font-bold text-slate-400 ml-0.5">%</small>
-                                </span>
+                            <div class="donut-chart flex-shrink-0" 
+                                 style="background: conic-gradient({{ ring_color }} {{ row.attendance_rate }}%, #f1f5f9 0);">
+                                <div class="donut-text">
+                                    <span class="text-xl font-black {{ color_class }}">
+                                        {{ row.attendance_rate }}<span class="text-xs">%</span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="mb-4">
-                            <div class="progress-bg">
-                                <div class="progress-fill 
-                                    {% if row.total_classes_so_far == 0 %}bg-slate-300
-                                    {% elif row.attendance_rate >= 80 %}bg-emerald-500
-                                    {% elif row.attendance_rate >= 50 %}bg-amber-500
-                                    {% else %}bg-rose-500{% endif %}"
-                                    style="width: {{ row.attendance_rate }}%"></div>
+                        <div class="grid grid-cols-3 gap-2 mb-4">
+                            <div class="stat-box">
+                                <div class="text-xs text-slate-400 font-bold mb-1">出席</div>
+                                <div class="text-lg font-bold text-emerald-600">{{ row.attendance_count }}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="text-xs text-slate-400 font-bold mb-1">遅刻</div>
+                                <div class="text-lg font-bold text-amber-600">{{ row.tardy_count }}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="text-xs text-slate-400 font-bold mb-1">欠席</div>
+                                <div class="text-lg font-bold text-rose-600">{{ row.absent_count }}</div>
                             </div>
                         </div>
 
-                        <div class="bg-slate-50 rounded-lg p-3 grid grid-cols-3 gap-2 text-center text-xs font-bold text-slate-500 mb-4">
-                            <div class="border-r border-slate-200">
-                                <div class="text-emerald-600 text-lg mb-[-2px]">{{ row.attendance_count }}</div>
-                                出席
-                            </div>
-                            <div class="border-r border-slate-200">
-                                <div class="text-amber-600 text-lg mb-[-2px]">{{ row.tardy_count }}</div>
-                                遅刻
-                            </div>
-                            <div>
-                                <div class="text-rose-600 text-lg mb-[-2px]">{{ row.absent_count }}</div>
-                                欠席
-                            </div>
-                        </div>
-
-                        <div class="flex justify-between items-center mt-auto pt-2">
+                        <div class="mt-auto pt-4 border-t border-slate-100 flex justify-between items-center">
                             <span class="text-xs text-slate-400 font-medium">
-                                <i class="far fa-clock mr-1"></i>実施回数: {{ row.total_classes_so_far }}回
+                                総授業: {{ row.total_classes_so_far }}回
                             </span>
                             <a href="/my_attendance_detail?student_id={{ student_id }}&kiki={{ selected_kiki }}&subject={{ row.subject }}" 
-                               class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-full transition flex items-center gap-1">
-                                詳細レポート <i class="fas fa-arrow-right text-xs"></i>
+                               class="text-xs font-bold text-white bg-slate-800 hover:bg-slate-900 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                                詳細 <i class="fas fa-chevron-right text-[10px]"></i>
                             </a>
                         </div>
-
                     </div>
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="glass-card p-12 text-center border-dashed border-2 border-slate-300">
-                    <div class="text-slate-300 text-6xl mb-4"><i class="fas fa-folder-open"></i></div>
+                <div class="glass-card p-16 text-center border-dashed border-2 border-slate-300">
+                    <div class="text-slate-300 text-6xl mb-6"><i class="fas fa-folder-open"></i></div>
                     <h3 class="text-xl font-bold text-slate-600 mb-2">データがありません</h3>
                     <p class="text-slate-400">この学期には履修している科目がまだ登録されていません。</p>
                 </div>
