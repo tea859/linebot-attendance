@@ -4,7 +4,7 @@ import csv
 import requests
 import base64
 import calendar
-import google.generativeai as genaifrom
+import google.generativeai as genai
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime, timedelta, time, date
