@@ -11,12 +11,15 @@
     <style>
         body {
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 24px 24px;
-            color: #1e293b;
+            background-color: #e5e5f7;
+            opacity: 1;
+            /* うろこ模様 */
+            /* ↑これだと強すぎるので、もっとシンプルなストライプなら↓ */
+            background-image: repeating-linear-gradient(45deg, #f1f5f9 25%, transparent 25%, transparent 75%, #f1f5f9 75%, #f1f5f9), repeating-linear-gradient(45deg, #f1f5f9 25%, #ffffff 25%, #ffffff 75%, #f1f5f9 75%, #f1f5f9);
+            background-position: 0 0, 10px 10px;
+            background-size: 20px 20px;
+            color: #334155;
         }
-
         /* カード共通デザイン */
         .dashboard-card {
             background: white;
