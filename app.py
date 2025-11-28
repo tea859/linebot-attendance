@@ -4,9 +4,10 @@ import csv
 import requests
 import base64
 import calendar
+import google.generativeai as genaifrom
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from collections import OrderedDict
 from urllib.parse import quote
 # ... (Flask, datetime, csv などのimport) ...
