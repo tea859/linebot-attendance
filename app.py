@@ -2862,8 +2862,27 @@ def my_portal():
                 "tardy_count": tardy_count,
                 "absent_count": total_absent # ⬅️ 合算した値を渡す
             })
+            
+    # --- 2. ヒートマップ作製 ---
+    try:
+        one_year_ago = datetime.now() - timedelta(days=365)
+        heatmap_query = db.session.query(
+            func.date(出席記録.出席時刻), func.count(出席記録.ID)
+        ).filter(
+            出席記録.学生ID == student_id,
+            出席記録.状態.in_(['出席', '遅刻']),
+            出席記録.出席時刻 >= one_year_ago
+        ).group_by(func.date(出席記録.出席時刻)).all()
+
+        heatmap_data = {}
+        for date_val, count in heatmap_query:
+            d_str = str(date_val) 
+            heatmap_data[d_str] = count
+    except Exception as e:
+        print(f"Heatmap Error: {e}")
+        heatmap_data = {} # エラー時は空データ
     
-    # --- 2. 時間割データを取得 ---
+    # --- 3. 時間割データを取得 ---
     # 授業と教室をJOINして取得
     schedules_rows = db.session.query(
         時間割.時間割ID, 時間割.曜日, 時間割.時限, 時間割.学期, 
@@ -2913,7 +2932,8 @@ def my_portal():
                            schedule_grid=schedule_grid,
                            曜日順=順序,
                            時限一覧=時限一覧,
-                           today_yobi=today_yobi
+                           today_yobi=today_yobi,
+                           heatmap_data=heatmap_data
                            )
 
 @app.route("/update_parent_email", methods=["POST"])
