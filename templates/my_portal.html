@@ -11,12 +11,15 @@
     <style>
         body {
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
-            background-size: 20px 20px;
+            background-color: #f3e8ff;
+            /* 紫とインディゴを濃いめに */
+            background-image: 
+                radial-gradient(circle at 50% -20%, rgba(192, 132, 252, 0.4) 0%, transparent 70%),
+                radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.4) 0%, transparent 60%);
+            background-attachment: fixed;
+            background-size: cover;
             color: #334155;
         }
-
         /* グラスモーフィズム */
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
