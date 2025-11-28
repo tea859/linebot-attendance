@@ -1196,7 +1196,7 @@ def index():
         {"url": "/edit_schedule?kiki=1", "name": "時間割編集"},
         {"url": "/manage_students", "name": "学生管理"},
         {"url": "/manage_subjects", "name": "授業科目管理"},
-        {"url": "/alerts", "name": "連絡・掲示板", "badge": alert_count},
+        {"url": "/alerts", "name": "連絡・掲示板", "badge": unresolved_alerts_count},
     ]
     
     return render_template("index.html", 
