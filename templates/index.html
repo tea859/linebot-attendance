@@ -11,13 +11,12 @@
     <style>
         body {
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #e5e5f7;
-            opacity: 1;
-            /* うろこ模様 */
-            /* ↑これだと強すぎるので、もっとシンプルなストライプなら↓ */
-            background-image: repeating-linear-gradient(45deg, #f1f5f9 25%, transparent 25%, transparent 75%, #f1f5f9 75%, #f1f5f9), repeating-linear-gradient(45deg, #f1f5f9 25%, #ffffff 25%, #ffffff 75%, #f1f5f9 75%, #f1f5f9);
-            background-position: 0 0, 10px 10px;
-            background-size: 20px 20px;
+            background-color: #f8fafc;
+            /* 左上から青、右下からローズ色のふわっとした光 */
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(244, 63, 94, 0.08) 0%, transparent 50%);
+            background-attachment: fixed; /* スクロールしても背景を固定 */
             color: #334155;
         }
         /* カード共通デザイン */
