@@ -5,71 +5,162 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>個人別出席状況サマリー</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <style>
-        .progress-bar-container {
-            height: 10px;
-            background-color: #e5e7eb;
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+            color: #334155;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+        }
+
+        .subject-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.2s ease;
+        }
+        .subject-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            border-color: #e0e7ff;
+        }
+
+        /* プログレスバー */
+        .progress-bg {
+            background-color: #f1f5f9;
             border-radius: 9999px;
+            height: 8px;
             overflow: hidden;
         }
+        .progress-fill {
+            height: 100%;
+            border-radius: 9999px;
+            transition: width 1s ease-in-out;
+        }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-6xl mx-auto">
-        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-green-500">
-            <div class="flex justify-between items-start mb-4">
-                <h1 class="text-3xl font-bold text-gray-800">{{ student_name }} さんの出席サマリー</h1>
-                <a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">← メインメニューに戻る</a>
-            </div>
+<body class="pb-20">
 
-            <nav class="flex space-x-2" aria-label="Tabs">
-                {% for kiki_num in kikis %}
-                <a href="/my_attendance?student_id={{ student_id }}&kiki={{ kiki_num }}" 
-                   class="px-4 py-2 font-medium text-sm rounded-t-lg transition duration-150 
-                   {% if kiki_num == selected_kiki %}bg-gray-100 text-green-600 border-b-2 border-green-600 shadow-sm{% else %}text-gray-500 hover:text-gray-700 hover:bg-gray-50{% endif %}">
-                    第{{ kiki_num }}期
-                </a>
-                {% endfor %}
-            </nav>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        
+        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+            <div class="flex items-center gap-4">
+                <div class="bg-gradient-to-br from-emerald-500 to-teal-500 text-white p-3 rounded-xl shadow-lg">
+                    <i class="fas fa-chart-pie text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">{{ student_name }} さんの出席状況</h1>
+                    <p class="text-slate-500 text-sm">各科目の出席率詳細レポート</p>
+                </div>
+            </div>
+            
+            <a href="/" class="group flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition">
+                <span class="group-hover:-translate-x-1 transition-transform">←</span> メインメニューに戻る
+            </a>
         </header>
 
-        <main class="bg-white p-6 rounded-xl shadow-xl">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">第{{ selected_kiki }}期 科目別集計</h2>
+        <nav class="flex space-x-2 mb-6 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s;">
+            {% for kiki_num in kikis %}
+            <a href="/my_attendance?student_id={{ student_id }}&kiki={{ kiki_num }}" 
+               class="px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 flex-shrink-0
+               {% if kiki_num == selected_kiki %}
+                   bg-emerald-600 text-white shadow-lg shadow-emerald-200 transform scale-105
+               {% else %}
+                   bg-white text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 shadow-sm
+               {% endif %}">
+                第{{ kiki_num }}期
+            </a>
+            {% endfor %}
+        </nav>
 
-            <div class="space-y-6">
-                {% for row in report_data %}
-                <div class="border border-gray-200 p-4 rounded-lg hover:shadow-md transition duration-150">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-lg font-bold text-gray-800">{{ row.subject }}</h3>
-                        <span class="text-2xl font-extrabold {% if row.attendance_rate >= 80 %}text-green-600{% elif row.attendance_rate >= 50 %}text-red-600{% else %}text-red-600{% endif %}">
-                            {{ row.attendance_rate }}%
-                        </span>
-                    </div>
-
-                    <div class="progress-bar-container mb-3">
-                        <div class="h-full 
-	                        {% if row.total_classes_so_far == 0 %}bg-gray-400
-	                        {% elif row.attendance_rate >= 80 %}bg-green-500
-	                        {% elif row.attendance_rate >= 50 %}bg-yellow-500
-	                        {% else %}bg-red-500{% endif %}"
-	                        style="width: {{ row.attendance_rate }}%">
-                    	</div>
-                    </div>
-
-                    <div class="flex justify-between text-sm text-gray-600">
+        <main class="animate-fade-in" style="animation-delay: 0.2s;">
+            
+            {% if report_data %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {% for row in report_data %}
+                    <div class="subject-card p-5 flex flex-col justify-between h-full">
                         
-                        <span>今日までの回数: <span class="font-bold">{{ row.total_classes_so_far }}</span></span>
-                        
-                        <span>出席: <span class="font-bold text-green-600">{{ row.attendance_count }}</span></span>
-                        <span>遅刻: <span class="font-bold text-yellow-600">{{ row.tardy_count }}</span></span>
-                        <span>欠席: <span class="font-bold text-red-600">{{ row.absent_count }}</span></span>
-                        <a href="/my_attendance_detail?student_id={{ student_id }}&kiki={{ selected_kiki }}&subject={{ row.subject }}" class="text-blue-500 hover:text-blue-700 font-medium">詳細を見る →</a>
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-lg font-bold text-slate-700 leading-tight w-2/3">
+                                {{ row.subject }}
+                            </h3>
+                            <div class="text-right">
+                                <span class="text-3xl font-black 
+                                    {% if row.attendance_rate >= 80 %}text-emerald-500
+                                    {% elif row.attendance_rate >= 50 %}text-amber-500
+                                    {% else %}text-rose-500{% endif %}">
+                                    {{ row.attendance_rate }}<small class="text-sm font-bold text-slate-400 ml-0.5">%</small>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="progress-bg">
+                                <div class="progress-fill 
+                                    {% if row.total_classes_so_far == 0 %}bg-slate-300
+                                    {% elif row.attendance_rate >= 80 %}bg-emerald-500
+                                    {% elif row.attendance_rate >= 50 %}bg-amber-500
+                                    {% else %}bg-rose-500{% endif %}"
+                                    style="width: {{ row.attendance_rate }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-50 rounded-lg p-3 grid grid-cols-3 gap-2 text-center text-xs font-bold text-slate-500 mb-4">
+                            <div class="border-r border-slate-200">
+                                <div class="text-emerald-600 text-lg mb-[-2px]">{{ row.attendance_count }}</div>
+                                出席
+                            </div>
+                            <div class="border-r border-slate-200">
+                                <div class="text-amber-600 text-lg mb-[-2px]">{{ row.tardy_count }}</div>
+                                遅刻
+                            </div>
+                            <div>
+                                <div class="text-rose-600 text-lg mb-[-2px]">{{ row.absent_count }}</div>
+                                欠席
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-auto pt-2">
+                            <span class="text-xs text-slate-400 font-medium">
+                                <i class="far fa-clock mr-1"></i>実施回数: {{ row.total_classes_so_far }}回
+                            </span>
+                            <a href="/my_attendance_detail?student_id={{ student_id }}&kiki={{ selected_kiki }}&subject={{ row.subject }}" 
+                               class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-full transition flex items-center gap-1">
+                                詳細レポート <i class="fas fa-arrow-right text-xs"></i>
+                            </a>
+                        </div>
+
                     </div>
+                    {% endfor %}
                 </div>
-                {% else %}
-                <p class="text-center text-gray-500 py-8">この学期に履修科目が見つかりません。</p>
-                {% endfor %}
-            </div>
+            {% else %}
+                <div class="glass-card p-12 text-center border-dashed border-2 border-slate-300">
+                    <div class="text-slate-300 text-6xl mb-4"><i class="fas fa-folder-open"></i></div>
+                    <h3 class="text-xl font-bold text-slate-600 mb-2">データがありません</h3>
+                    <p class="text-slate-400">この学期には履修している科目がまだ登録されていません。</p>
+                </div>
+            {% endif %}
+
         </main>
     </div>
 </body>
