@@ -68,43 +68,25 @@
         .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
     </style>
 </head>
-<body class="pb-20">
+<body class="pb-20 pt-16">
 
-    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm mb-8">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
-                    <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2 rounded-lg shadow-lg">
-                        <i class="fas fa-school text-xl"></i>
-                    </div>
-                    <div class="flex flex-col">
-                        <span class="font-bold text-lg leading-tight text-slate-800">Attendance System</span>
-                        <span class="text-[10px] font-bold text-slate-400 tracking-widest">ADMIN DASHBOARD</span>
-                    </div>
-                </a>
-
-                <div class="flex items-center gap-6">
-                    {% if current_user.is_authenticated %}
-                        <div class="hidden md:flex flex-col items-end">
-                            <span class="text-[10px] text-slate-400 font-bold">LOGIN USER</span>
-                            <span class="text-sm font-bold text-indigo-600">{{ current_user.username }}</span>
-                        </div>
-                        
-                        <div class="h-6 w-px bg-slate-200"></div>
-                        
-                        <a href="/logout" class="text-slate-500 hover:text-slate-800 font-bold text-sm flex items-center gap-2 transition">
-                            <i class="fas fa-sign-out-alt"></i> ログアウト
-                        </a>
-                    {% else %}
-                        <a href="/login" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow hover:bg-blue-700 transition">
-                            ログイン
-                        </a>
-                    {% endif %}
+    <nav class="bg-white border-b border-slate-200 fixed top-0 inset-x-0 z-50 h-16 flex items-center shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-between items-center">
+            <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
+                <div class="bg-blue-600 text-white p-2 rounded-md flex items-center justify-center w-10 h-10 shadow-sm">
+                    <i class="fas fa-building text-xl"></i>
                 </div>
-            </div>
+                <span class="font-bold text-xl text-slate-800">Attendance System</span>
+            </a>
+
+            <a href="/" class="text-slate-500 hover:text-blue-600 transition flex items-center gap-2 font-medium text-sm">
+                <i class="fas fa-home"></i> ダッシュボードへ
+            </a>
         </div>
     </nav>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"> <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        
+        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
             <div class="flex items-center gap-4">
                 <div class="bg-gradient-to-br from-indigo-500 to-violet-600 text-white p-3 rounded-xl shadow-lg">
                     <i class="fas fa-chart-pie text-2xl"></i>
