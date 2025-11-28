@@ -48,6 +48,16 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename # ファイル名を安全にする機能
 app = Flask(__name__)
 
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    # Gemini 1.5 Flash (高速・安価なモデル) を使用
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    gemini_model = None
+    print("⚠️ Gemini APIキーが設定されていません")
+
 UPLOAD_DIR = 'uploaded_images'
 if not os.path.exists(UPLOAD_DIR):
     os.makedirs(UPLOAD_DIR) # フォルダがなければ自動で作る
