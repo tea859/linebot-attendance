@@ -3,7 +3,8 @@ import io
 import csv
 import requests
 import base64
-from dotenv import load_dotenv # ⬅️ これを追加
+import calendar
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response, flash, get_flashed_messages, abort
 from datetime import datetime, timedelta, time
 from collections import OrderedDict
@@ -3088,7 +3089,96 @@ def my_portal_detail():
                            # --- ▼▼▼ 修正点2: ポータルビューフラグをTrueに ▼▼▼ ---
                            is_portal_view=True 
                            )
+
+@app.route("/schedule_monthly")
+@login_required
+def schedule_monthly():
+    """月間カレンダー表示"""
+    # URLパラメータから年・月を取得 (なければ現在年月)
+    now = datetime.now()
+    year = request.args.get('year', now.year, type=int)
+    month = request.args.get('month', now.month, type=int)
+
+    # 月の移動ロジック
+    if month > 12:
+        year += 1
+        month = 1
+    elif month < 1:
+        year -= 1
+        month = 12
+
+    # カレンダーのデータを作成
+    # monthcalendarは [0,0,1,2,3,4,0] のような週ごとのリストを返す (0は月外)
+    cal = calendar.monthcalendar(year, month)
     
+    # 表示用のデータ構築
+    calendar_data = []
+    
+    for week in cal:
+        week_data = []
+        for day in week:
+            if day == 0:
+                week_data.append(None) # 空白セル
+                continue
+            
+            date_str = f"{year}/{month}/{day}" # DB検索用 (例: 2025/4/1)
+            date_obj = datetime(year, month, day)
+            
+            # 1. 授業計画からその日のパターンを取得
+            plan = 授業計画.query.get(date_str)
+            
+            day_info = {
+                "day": day,
+                "weekday": date_obj.strftime('%a'), # Mon, Tue...
+                "is_holiday": False,
+                "remark": "",
+                "classes": []
+            }
+
+            if plan:
+                day_info["remark"] = plan.備考
+                
+                # 授業日コード (1=月, ..., 5=金) がある場合
+                if plan.授業曜日 in YOBI_MAP_REVERSE and plan.授業曜日 != 0:
+                    yobi_str = YOBI_MAP_REVERSE[plan.授業曜日] # "月" などに変換
+                    kiki_str = str(plan.期)
+                    
+                    # 2. 時間割テーブルから授業を取得
+                    # 時間割と授業を結合して科目名を取得
+                    slots = db.session.query(時間割, 授業)\
+                        .outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
+                        .filter(時間割.学期 == kiki_str, 時間割.曜日 == yobi_str)\
+                        .order_by(時間割.時限).all()
+                    
+                    # 1〜5限の枠を埋める
+                    periods = {p: "-" for p in range(1, 6)}
+                    for t, s in slots:
+                        if t.時限 in periods:
+                            if t.時限 == 5 and t.備考: # 5限の備考対応
+                                periods[t.時限] = t.備考
+                            elif s:
+                                periods[t.時限] = s.授業科目名
+                    
+                    day_info["classes"] = periods
+                else:
+                    # 授業曜日が0 または なしの場合（休日など）
+                    day_info["is_holiday"] = True
+            
+            # 土日は強制的に休日扱い（またはDB設定に従う）
+            if date_obj.weekday() >= 5: # 5=Sat, 6=Sun
+                day_info["is_holiday"] = True
+
+            week_data.append(day_info)
+        calendar_data.append(week_data)
+
+    return render_template(
+        "schedule_monthly.html",
+        calendar_data=calendar_data,
+        year=year, month=month,
+        prev_month=month-1, prev_year=year,
+        next_month=month+1, next_year=year
+    )
+
 @app.route("/student_logout")
 @login_required
 def student_logout():
