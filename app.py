@@ -329,6 +329,92 @@ def save_image(base64_data, student_id):
         print(f"画像保存エラー: {e}")
         return None
 
+#AI応答
+def ask_ai_about_schedule(user_question, student_name):
+    """
+    ユーザーの質問に対し、DBの直近1週間の時間割を参照してAIが回答する
+    """
+    if not gemini_model:
+        return "⚠️ AI機能の準備ができていません（APIキー設定待ち）"
+
+    # 1. 今日から1週間分の日付範囲
+    today = datetime.now().date()
+    one_week_later = today + timedelta(days=7)
+    
+    # 2. DBから「日付」と「その日の授業」を取得
+    # Postgres用のSQL構文です
+    sql = text("""
+        SELECT 
+            P."日付", 
+            P."授業曜日", 
+            P."備考" as 日の備考,
+            T."時限",
+            S."授業科目名",
+            S."担当教員",
+            T."備考" as 授業備考
+        FROM "授業計画" P
+        LEFT JOIN "時間割" T ON P."期" = T."学期" AND 
+             (CASE P."授業曜日" 
+                 WHEN 1 THEN '月' WHEN 2 THEN '火' WHEN 3 THEN '水' 
+                 WHEN 4 THEN '木' WHEN 5 THEN '金' END) = T."曜日"
+        LEFT JOIN "授業" S ON T."授業ID" = S."授業ID"
+        WHERE TO_DATE(REPLACE(P."日付", '/', '-'), 'YYYY-MM-DD') BETWEEN :start AND :end
+        ORDER BY P."日付", T."時限"
+    """)
+    
+    try:
+        rows = db.session.execute(sql, {"start": today, "end": one_week_later}).fetchall()
+    except Exception as e:
+        print(f"DB Error: {e}")
+        return "スケジュールの取得中にエラーが発生しました。"
+
+    # 3. AIに読ませるテキストデータを作る
+    schedule_text = ""
+    current_date = ""
+    
+    if not rows:
+        schedule_text = "（期間内の授業データはありません）"
+    
+    for row in rows:
+        # row: [0]日付, [1]曜日, [2]日の備考, [3]時限, [4]科目名, [5]教員, [6]授業備考
+        date_str = row[0]
+        if current_date != date_str:
+            schedule_text += f"\n■ {date_str} の予定:\n"
+            current_date = date_str
+            if row[2]: schedule_text += f"  (特記事項: {row[2]})\n"
+        
+        # 授業がある場合のみ追記
+        if row[3]: 
+            subject = row[4] or "空き/不明"
+            teacher = f"({row[5]})" if row[5] else ""
+            memo = f"※{row[6]}" if row[6] else ""
+            schedule_text += f"  - {row[3]}限: {subject} {teacher} {memo}\n"
+
+    # 4. プロンプト（命令文）
+    prompt = f"""
+    あなたは学校の親切な「授業コンシェルジュ」です。
+    学生（{student_name}さん）からの質問に、以下の「週間スケジュール」をもとにして答えてください。
+    
+    【ルール】
+    - スケジュールに載っていないことは「情報がありません」と正直に答えること。
+    - 学生に親しみやすく、かつ丁寧な敬語で話しかけること。
+    - 必要に応じて絵文字を使って。
+    - 今日の日付は {today} です。
+    
+    【週間スケジュール情報】
+    {schedule_text}
+    
+    【学生の質問】
+    {user_question}
+    """
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"AI Error: {e}")
+        return "申し訳ありません。AIの応答に失敗しました。"
+
 def check_and_send_alert(student_id, subject_id):
     print(f"🔍 [DEBUG] アラート判定開始: 学生ID={student_id}, 授業ID={subject_id}")
 
@@ -2682,7 +2768,27 @@ if handler:
                     reply_message = TextSendMessage(
                         text=f"❌ 理由が入力されていません。\n例: 「{report_type}連絡:風邪のため」"
                     )
-
+        # ==========================================
+        # 7. AIコンシェルジュ機能 (追加)
+        # ==========================================
+        elif received_text.startswith("教えて") or received_text.startswith("AI"):
+            # 送信者の名前を取得
+            student_id = get_student_id_from_line_user(user_id)
+            student_name = "学生"
+            if student_id:
+                s = 学生.query.get(student_id)
+                if s: student_name = s.学生名
+                
+            # 「教えて」などのキーワードを削除して質問だけにする
+            question = received_text.replace("教えて", "").replace("AI", "").strip()
+            
+            if not question:
+                reply_message = TextSendMessage(text="❓ 何について知りたいですか？\n例：「教えて 明日の授業」「AI 来週のテスト」")
+            else:
+                # AIに回答させる
+                ai_answer = ask_ai_about_schedule(question, student_name)
+                reply_message = TextSendMessage(text=ai_answer)
+                
         # --- その他のメッセージ ---
         else:
             # 該当しないメッセージには反応しない（またはヘルプを出す）
@@ -2694,7 +2800,7 @@ if handler:
         # ==========================================
         if reply_message:
             line_bot_api.reply_message(event.reply_token, reply_message)
-
+            
 # ----------------------------------------------------------------------
 # 11. 学生専用ポータル (Student Portal)
 # ----------------------------------------------------------------------
