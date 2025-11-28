@@ -5,110 +5,243 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>時間割表示</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+            color: #334155;
+        }
+
+        /* グラスモーフィズムカード */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* 時間割グリッド */
         .grid-container {
-            /* ヘッダー(50px) + 5列 */
-            grid-template-columns: 50px repeat(5, minmax(0, 1fr));
+            display: grid;
+            grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background-color: white;
         }
+        
+        .header-cell {
+            background-color: #f1f5f9;
+            color: #64748b;
+            font-weight: 700;
+            padding: 12px;
+            text-align: center;
+            border-bottom: 2px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+        }
+        
+        .time-label {
+            background-color: #f8fafc;
+            color: #94a3b8;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 2px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
         .time-slot {
-            /* セルの高さを固定 */
-            height: 110px; 
-        }
-        /* 授業情報のスタイル */
-        .class-info {
+            height: 130px; /* セルの高さを少し広げました */
+            border-right: 1px solid #f1f5f9;
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s ease;
+            position: relative;
+            padding: 8px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100%;
             text-align: center;
-            line-height: 1.4;
         }
-        .subject-name {
-            font-weight: 600;
-            color: #1f2937;
+        .time-slot:hover {
+            background-color: #f8fafc;
+            transform: scale(1.02);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border-radius: 8px;
         }
-        .details {
-            font-size: 0.8em;
-            color: #4b5563;
+
+        /* 授業があるセル */
+        .has-class {
+            background-color: white;
         }
-        
-        /* ★★★ 今日の曜日を強調するスタイル ★★★ */
+        /* 空きコマ */
+        .is-empty {
+            background-color: #fcfcfc;
+            color: #cbd5e1;
+        }
+        /* 5限（備考） */
+        .period-5 {
+            background-color: #fffbeb; /* amber-50 */
+        }
+
+        /* 今日の強調表示 */
         .today-header {
-            background-color: #dbeafe !important;
-            color: #1d4ed8 !important;
-            border-bottom: 3px solid #3b82f6;
+            background-color: #eff6ff !important; /* blue-50 */
+            color: #3b82f6 !important; /* blue-500 */
+            border-bottom: 2px solid #3b82f6;
         }
-        .today-cell {
-            /* 今日のセルは薄い青でハイライト */
-            background-color: #eff6ff !important; 
+        .today-col {
+            background-color: #eff6ff !important; /* blue-50 */
+        }
+        .today-col:hover {
+            background-color: #dbeafe !important; /* blue-100 */
+        }
+
+        /* テキストスタイル */
+        .subject-name {
+            font-weight: 700;
+            color: #1e293b;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+            line-height: 1.3;
+        }
+        .teacher-name {
+            font-size: 0.8rem;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .room-name {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            background-color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
         }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-7xl mx-auto">
-        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-purple-500 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800">時間割表示</h1>
-            <a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">← メインメニューに戻る</a>
+<body class="pb-20">
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        
+        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+            <div class="flex items-center gap-4">
+                <div class="bg-gradient-to-br from-purple-500 to-indigo-600 text-white p-3 rounded-xl shadow-lg">
+                    <i class="far fa-calendar-alt text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">時間割表示</h1>
+                    <p class="text-slate-500 text-sm">全学期のスケジュールを確認できます</p>
+                </div>
+            </div>
+            
+            <a href="/" class="group flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition">
+                <span class="group-hover:-translate-x-1 transition-transform">←</span> メインメニューに戻る
+            </a>
         </header>
 
-        <nav class="flex space-x-4 mb-6" aria-label="Tabs">
+        <nav class="flex space-x-2 mb-6 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s;">
             {% for kiki_num in kikis %}
             <a href="/schedule?kiki={{ kiki_num }}" 
-               class="px-5 py-2 font-medium text-lg rounded-t-xl transition duration-150 
-               {% if kiki_num == selected_kiki %}bg-white text-purple-600 border-b-4 border-purple-600 shadow-md{% else %}text-gray-500 hover:text-purple-700 hover:bg-gray-50{% endif %}">
+               class="px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 flex-shrink-0
+               {% if kiki_num == selected_kiki %}
+                   bg-indigo-600 text-white shadow-lg shadow-indigo-200 transform scale-105
+               {% else %}
+                   bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 shadow-sm
+               {% endif %}">
                 第{{ kiki_num }}期
             </a>
             {% endfor %}
         </nav>
 
-        <div class="bg-white p-6 rounded-xl shadow-xl">
-            <h2 class="text-xl font-semibold text-gray-700 mb-4">第{{ selected_kiki }}期 時間割</h2>
+        <div class="glass-card p-6 animate-fade-in" style="animation-delay: 0.2s;">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-slate-700 flex items-center gap-2">
+                    <span class="bg-indigo-100 text-indigo-600 w-8 h-8 rounded-full flex items-center justify-center text-sm">{{ selected_kiki }}</span>
+                    第{{ selected_kiki }}期 時間割
+                </h2>
+                {% if today_yobi %}
+                <span class="text-xs font-bold bg-blue-50 text-blue-600 px-3 py-1 rounded-full border border-blue-100">
+                    今日は {{ today_yobi }}曜日 です
+                </span>
+                {% endif %}
+            </div>
             
-            <div class="grid grid-container border border-gray-300 rounded-lg overflow-hidden text-center">
-                
-                <div class="bg-gray-200 font-bold p-3 border-r border-gray-300">時限</div>
-                {% for day in 曜日順 %}
-                <div class="bg-gray-200 font-bold p-3 border-r border-gray-300 {% if day == today_yobi %}today-header{% endif %}">
-                    {{ day }}
-                </div>
-                {% endfor %}
-                
-                {% for period in 時限一覧 %}
-                    <div class="bg-gray-100 font-bold time-slot flex items-center justify-center border-r border-gray-300 border-t">
-                        {% if period == 5 %}
-                            備考
-                        {% else %}
-                            {{ period }}
-                        {% endif %}
-                    </div>
+            <div class="overflow-x-auto pb-4">
+                <div class="grid grid-container min-w-[800px]">
                     
-                    {% for day in 曜日順 %}
-                        {% set slot = schedule_grid[period][day] %}
-                        <div class="time-slot p-1 border-r border-gray-300 border-t 
-                             {% if day == today_yobi %}today-cell{% endif %}
-                             
-                             {% if slot.is_empty %}bg-gray-50 text-gray-400 italic
-                             {% elif period == 5 %}bg-yellow-100
-                             {% else %}bg-gray-50 hover:bg-gray-100  {% endif %}">
-                            
-                            <div class="class-info">
+                    <div class="header-cell bg-slate-50"></div> {% for day in 曜日順 %}
+                    <div class="header-cell {% if day == today_yobi %}today-header{% endif %}">
+                        {{ day }}
+                    </div>
+                    {% endfor %}
+                    
+                    {% for period in 時限一覧 %}
+                        <div class="time-label">
+                            {% if period == 5 %}
+                                <span class="text-xs">備考</span>
+                            {% else %}
+                                {{ period }}<span class="text-[10px] ml-0.5">限</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% for day in 曜日順 %}
+                            {% set slot = schedule_grid[period][day] %}
+                            <div class="time-slot 
+                                {% if day == today_yobi %}today-col{% endif %}
+                                {% if slot.is_empty %}is-empty
+                                {% elif period == 5 %}period-5
+                                {% else %}has-class{% endif %}">
+                                
                                 {% if slot.is_empty %}
-                                    <span>休憩/空欄</span>
+                                    <span class="text-3xl opacity-20 font-light">-</span>
+                                
                                 {% elif period == 5 %}
-                                    <span class="details">{{ slot.remark if slot.remark else 'なし' }}</span>
+                                    <span class="text-sm font-bold text-amber-700">
+                                        {{ slot.display_text if slot.display_text else 'なし' }}
+                                    </span>
+                                
                                 {% else %}
-                                    <span class="subject-name">{{ slot.subject }}</span>
-                                    <span class="details">{{ slot.teacher }}</span>
-                                    <span class="details">{{ slot.room }}</span>
+                                    <span class="subject-name">{{ slot.display_text }}</span>
+                                    
+                                    {% if slot.teacher %}
+                                    <span class="teacher-name">
+                                        <i class="fas fa-user-tie text-[10px]"></i> {{ slot.teacher }}
+                                    </span>
+                                    {% endif %}
+                                    
+                                    {% if slot.room %}
+                                    <span class="room-name">
+                                        {{ slot.room }}
+                                    </span>
+                                    {% endif %}
                                 {% endif %}
                             </div>
-
-                        </div>
+                        {% endfor %}
                     {% endfor %}
-                {% endfor %}
+                </div>
             </div>
         </div>
+
     </div>
 </body>
 </html>
