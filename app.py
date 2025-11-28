@@ -342,7 +342,7 @@ def ask_ai_about_schedule(user_question, student_name):
     one_week_later = today + timedelta(days=7)
     
     # 2. DBから「日付」と「その日の授業」を取得
-    # Postgres用のSQL構文です
+    # ▼▼▼ 修正: P."期" (数値) を VARCHAR (文字) に変換して結合しています ▼▼▼
     sql = text("""
         SELECT 
             P."日付", 
@@ -353,7 +353,7 @@ def ask_ai_about_schedule(user_question, student_name):
             S."担当教員",
             T."備考" as 授業備考
         FROM "授業計画" P
-        LEFT JOIN "時間割" T ON P."期" = T."学期" AND 
+        LEFT JOIN "時間割" T ON CAST(P."期" AS VARCHAR) = T."学期" AND 
              (CASE P."授業曜日" 
                  WHEN 1 THEN '月' WHEN 2 THEN '火' WHEN 3 THEN '水' 
                  WHEN 4 THEN '木' WHEN 5 THEN '金' END) = T."曜日"
@@ -366,7 +366,7 @@ def ask_ai_about_schedule(user_question, student_name):
         rows = db.session.execute(sql, {"start": today, "end": one_week_later}).fetchall()
     except Exception as e:
         print(f"DB Error: {e}")
-        return "スケジュールの取得中にエラーが発生しました。"
+        return f"データ取得エラーが発生しました: {e}"
 
     # 3. AIに読ませるテキストデータを作る
     schedule_text = ""
