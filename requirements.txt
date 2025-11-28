@@ -8,3 +8,4 @@ python-dotenv
 opencv-python
 requests
 gunicorn
+google-generativeai
