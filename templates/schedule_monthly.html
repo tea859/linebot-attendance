@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>月間予定表</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; }
+        .calendar-cell { min-height: 140px; transition: all 0.2s; }
+        .calendar-cell:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 10; }
+        .period-badge { font-size: 0.7rem; padding: 1px 4px; border-radius: 4px; background: #e2e8f0; color: #64748b; margin-right: 4px; }
+        .class-name { font-size: 0.75rem; font-weight: 700; color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .holiday-bg { background-color: #fef2f2; } /* 休日の色 */
+        .today-border { border: 2px solid #3b82f6 !important; }
+    </style>
+</head>
+<body class="pb-20 text-slate-800">
+
+    <div class="max-w-[1400px] mx-auto px-4 pt-6">
+        
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-slate-400 hover:text-indigo-600 transition"><i class="fas fa-arrow-left"></i> 戻る</a>
+                <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <i class="far fa-calendar-alt text-indigo-500"></i>
+                    {{ year }}年 {{ month }}月
+                </h1>
+            </div>
+            
+            <div class="flex items-center bg-white rounded-lg shadow-sm border border-slate-200 p-1">
+                <a href="/schedule_monthly?year={{ prev_year }}&month={{ prev_month }}" class="px-4 py-2 hover:bg-slate-100 rounded-md text-slate-600 transition">
+                    <i class="fas fa-chevron-left"></i> 先月
+                </a>
+                <a href="/schedule_monthly?year={{ next_year }}&month={{ next_month }}" class="px-4 py-2 hover:bg-slate-100 rounded-md text-slate-600 transition">
+                    来月 <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+            <div class="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
+                {% for day in ['月', '火', '水', '木', '金', '土', '日'] %}
+                <div class="py-3 text-center text-sm font-bold 
+                    {% if day == '土' %}text-blue-500{% elif day == '日' %}text-red-500{% else %}text-slate-600{% endif %}">
+                    {{ day }}
+                </div>
+                {% endfor %}
+            </div>
+
+            {% for week in calendar_data %}
+            <div class="grid grid-cols-7 border-b border-slate-100 last:border-none">
+                {% for day_info in week %}
+                    {% if day_info is none %}
+                        <div class="bg-slate-50/50"></div> {% else %}
+                        <div class="calendar-cell p-2 border-r border-slate-100 last:border-none relative flex flex-col gap-1
+                            {% if day_info.is_holiday %}holiday-bg{% else %}bg-white{% endif %}">
+                            
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="text-sm font-bold {% if day_info.is_holiday %}text-red-500{% else %}text-slate-700{% endif %}">
+                                    {{ day_info.day }}
+                                </span>
+                                {% if day_info.remark %}
+                                <span class="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 rounded font-bold border border-yellow-200 truncate max-w-[80px]">
+                                    {{ day_info.remark }}
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            {% if day_info.classes %}
+                                {% for p, name in day_info.classes.items() %}
+                                    {% if name != '-' %}
+                                    <div class="flex items-center bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100" title="{{ p }}限: {{ name }}">
+                                        <span class="period-badge">{{ p }}</span>
+                                        <span class="class-name">{{ name }}</span>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% elif not day_info.is_holiday %}
+                                <div class="flex-grow flex items-center justify-center">
+                                    <span class="text-xs text-slate-300">授業なし</span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
