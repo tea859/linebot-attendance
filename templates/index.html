@@ -179,6 +179,10 @@
                 {% endfor %}
                 
                 {% if current_user.is_authenticated %}
+                <a href="/schedule_monthly" class="feature-card animate-fade-in" style="animation-delay: 0.25s;">
+                    <div class="feature-icon"><i class="far fa-calendar-days"></i></div>
+                    <span class="font-bold text-slate-700">月間予定表</span>
+                </a>
                 <a href="/report_summary" class="feature-card animate-fade-in" style="animation-delay: 0.3s;">
                     <div class="feature-icon"><i class="fas fa-chart-bar"></i></div>
                     <span class="font-bold text-slate-700">授業別レポート</span>
