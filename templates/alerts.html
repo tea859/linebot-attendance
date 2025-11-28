@@ -5,76 +5,158 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>遅刻・欠席連絡 掲示板</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
     <style>
-        .table-striped tbody tr:nth-child(odd) {
-            background-color: #f9fafb;
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+            color: #334155;
         }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* 連絡カードのデザイン */
+        .report-card {
+            background: white;
+            border-radius: 12px;
+            border-left: 5px solid;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .report-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* 種類別の色 */
+        .type-late { border-color: #f59e0b; } /* 遅刻: 黄 */
+        .type-absent { border-color: #ef4444; } /* 欠席: 赤 */
+        
+        /* バッジ */
+        .badge {
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .badge-late { background-color: #fef3c7; color: #b45309; }
+        .badge-absent { background-color: #fee2e2; color: #b91c1c; }
+
+        /* アニメーション */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-6xl mx-auto">
-        
-        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-red-500 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800">📢 遅刻・欠席連絡 掲示板</h1>
-            <a href="/" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">← メインメニューに戻る</a>
-        </header>
-        
-        <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="p-4 mb-4 rounded-lg 
-                            {% if category == 'success' %} bg-green-100 text-green-700 border border-green-400
-                            {% elif category == 'error' %} bg-red-100 text-red-700 border border-red-400
-                            {% endif %}" role="alert">
-                            <p>{{ message }}</p>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+<body class="pb-20">
 
-            {% if reports %}
-                <p class="mb-4"><strong>未確認の連絡: {{ reports|length }} 件</strong></p>
-                <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 table-striped">
-                    <thead>
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">報告日時</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">学生名</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">区分</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">理由</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">アクション</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        {% for report, student_name in reports %}
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ report.report_date.strftime('%Y/%m/%d %H:%M') }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ report.student_id }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ student_name }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                    {% if report.report_type == '欠席' %}bg-red-100 text-red-800
-                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                                    {{ report.report_type }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ report.reason }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-right">
-                                <form method="POST" action="{{ url_for('resolve_alert', record_id=report.record_id) }}" onsubmit="return confirm('この連絡を確認済みにしますか？');">
-                                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-lg text-xs">確認済みにする</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="animate-fade-in mb-6 p-4 rounded-xl shadow-sm border flex items-start gap-3
+                    {% if category == 'success' %} bg-emerald-50 text-emerald-800 border-emerald-200
+                    {% elif category == 'error' %} bg-rose-50 text-rose-800 border-rose-200
+                    {% else %} bg-blue-50 text-blue-800 border-blue-200
+                    {% endif %}">
+                    <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %} mt-1"></i>
+                    <p class="font-medium">{{ message }}</p>
                 </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
+            <div class="flex items-center gap-4">
+                <div class="bg-gradient-to-br from-orange-500 to-red-500 text-white p-3 rounded-xl shadow-lg">
+                    <i class="fas fa-bullhorn text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-800">連絡掲示板</h1>
+                    <p class="text-slate-500 text-sm">学生からの遅刻・欠席連絡を確認します</p>
+                </div>
+            </div>
+            
+            <a href="/" class="group flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-orange-600 transition">
+                <span class="group-hover:-translate-x-1 transition-transform">←</span> メインメニューに戻る
+            </a>
+        </header>
+
+        <div class="animate-fade-in" style="animation-delay: 0.1s;">
+            {% if reports %}
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+                        <i class="fas fa-inbox text-orange-500"></i> 未確認の連絡
+                    </h2>
+                    <span class="bg-orange-100 text-orange-700 text-xs font-bold px-3 py-1 rounded-full border border-orange-200">
+                        {{ reports|length }} 件
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    {% for report, student_name in reports %}
+                    <div class="report-card p-5 {% if report.report_type == '欠席' %}type-absent{% else %}type-late{% endif %}">
+                        <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+                            
+                            <div class="flex-grow">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="badge {% if report.report_type == '欠席' %}badge-absent{% else %}badge-late{% endif %}">
+                                        {{ report.report_type }}
+                                    </span>
+                                    <span class="text-xs text-slate-400 font-medium">
+                                        <i class="far fa-clock mr-1"></i>{{ report.report_date.strftime('%Y/%m/%d %H:%M') }}
+                                    </span>
+                                </div>
+                                
+                                <h3 class="text-lg font-bold text-slate-800 mb-1">
+                                    {{ student_name }} <span class="text-xs font-normal text-slate-400 ml-1">ID: {{ report.student_id }}</span>
+                                </h3>
+                                
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm text-slate-600 mt-2">
+                                    <span class="font-bold text-slate-400 text-xs uppercase mr-1">理由:</span>
+                                    {{ report.reason }}
+                                </div>
+                            </div>
+
+                            <div class="flex-shrink-0 self-center md:self-start">
+                                <form method="POST" action="{{ url_for('resolve_alert', record_id=report.record_id) }}" onsubmit="return confirm('確認済みにしますか？');">
+                                    <button type="submit" class="bg-white border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 font-bold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-2">
+                                        <i class="fas fa-check"></i>
+                                        <span class="hidden md:inline">確認完了</span>
+                                    </button>
+                                </form>
+                            </div>
+
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
             {% else %}
-                <div class="alert alert-info bg-blue-100 text-blue-700 p-4 rounded-lg">現在、未確認の遅刻・欠席連絡はありません。</div>
+                <div class="glass-card p-12 text-center border-dashed border-2 border-slate-300">
+                    <div class="text-emerald-300 text-6xl mb-4"><i class="fas fa-check-circle"></i></div>
+                    <h3 class="text-xl font-bold text-slate-600 mb-2">すべて確認済みです</h3>
+                    <p class="text-slate-400">現在、未対応の連絡はありません。</p>
+                </div>
             {% endif %}
         </div>
+
     </div>
 </body>
 </html>
