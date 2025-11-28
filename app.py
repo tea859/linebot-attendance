@@ -1191,12 +1191,13 @@ def index():
             # エラーが発生してもページは表示させる
             unresolved_alerts_count = 0        
     links = [
-        {"url": "/attendance?kiki=1", "name": "出席登録 / 全体記録"},
-        {"url": "/schedule", "name": "時間割表示"},
-        {"url": "/edit_schedule?kiki=1", "name": "時間割編集"},
-        {"url": "/manage_students", "name": "学生管理"},
-        {"url": "/manage_subjects", "name": "授業科目管理"},
-        {"url": "/alerts", "name": "連絡・掲示板", "badge": unresolved_alerts_count},
+        {"url": "/attendance?kiki=1", "name": "出席登録 / 全体記録", "badge": 0}, # 0なら表示されない
+        {"url": "/schedule", "name": "時間割表示", "badge": 0},
+        {"url": "/edit_schedule?kiki=1", "name": "時間割編集", "badge": 0},
+        {"url": "/manage_students", "name": "学生管理", "badge": 0},
+        {"url": "/manage_subjects", "name": "授業科目管理", "badge": 0},
+        # ↓ ここだけ実際の件数を入れる
+        {"url": "/alerts", "name": "連絡・掲示板", "badge": unresolved_alerts_count}, 
     ]
     
     return render_template("index.html", 
