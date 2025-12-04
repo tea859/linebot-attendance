@@ -1838,3 +1838,25 @@ def student_logout():
     flash("ログアウトしました。", "success")
     return redirect(url_for('web.student_login'))
 
+@web_bp.route("/reset_database_secret_command")
+@login_required
+def reset_database():
+    """
+    【注意】データベースを強制的に作り直す隠しコマンド
+    アクセスすると全データが消えます。
+    """
+    # 管理者以外は実行できないようにガード（念のため）
+    if current_user.get_id().startswith('student-'):
+        return "学生はこの操作を実行できません。", 403
+
+    try:
+        # 1. 全テーブルを削除
+        db.drop_all()
+        
+        # 2. 全テーブルを再作成（新しい構造で）
+        db.create_all()
+        
+        return "✅ データベースをリセットしました。（新しいカラムが追加されました）"
+    except Exception as e:
+        return f"❌ エラーが発生しました: {e}"
+
