@@ -269,11 +269,65 @@ if handler:
         # 7. 該当なしの場合（ヘルプを表示）
         # ==========================================
         else:
-            # ここが重要！無視せずにメニューを出す
-            print(f"⚠️ [未対応コマンド] '{received_text}'")
-            reply_message = TextSendMessage(
-                text="🤖 メニューを選択するか、以下のキーワードを送ってください。\n\n・時間割メニュー\n・出席・連絡メニュー\n・今日の時間割\n・分析\n・登録:学生ID"
-            )
+        student_id = get_student_id_from_line_user(user_id)
+        
+        # 学生登録していない場合
+        if student_id is None:
+            reply_message = TextSendMessage(text="⚠️ まずは学生IDを登録してください。\n例:「登録:222521301」")
+        else:
+            # ★★★ AIによる自然言語解析 ★★★
+            ai_result = parse_message_with_ai(received_text)
+            
+            if ai_result and ai_result.get("is_report"):
+                # --- A. 届出（遅刻・欠席）と判定された場合 ---
+                report_type = ai_result["report_type"]     # "遅刻" or "欠席"
+                category = ai_result["category"]           # "交通機関" etc
+                summary = ai_result["reason_summary"]      # "電車遅延"
+                ai_reply = ai_result["reply_text"]         # "承知いたしました..."
+
+                # DBに保存
+                new_report = ReportRecord(
+                    student_id=student_id,
+                    report_type=report_type,
+                    reason=received_text,   # 原文を保存
+                    ai_analysis=f"[{category}] {summary}", # AI分析結果
+                    report_date=datetime.now(),
+                    is_resolved=False
+                )
+                db.session.add(new_report)
+                db.session.commit()
+
+                # 管理者へメール通知 (GAS経由)
+                try:
+                    student = 学生.query.get(student_id)
+                    admin_email = os.environ.get('MAIL_USERNAME')
+                    if admin_email and os.environ.get('GAS_API_URL'):
+                        body_text = f"学生: {student.学生名}\n区分: {report_type}\n原文: {received_text}\nAI分析: [{category}] {summary}\n日時: {datetime.now()}"
+                        payload = {
+                            "to": admin_email,
+                            "subject": f"【{report_type}】{student.学生名} ({category})",
+                            "body": body_text,
+                            "auth_token": os.environ.get('GAS_AUTH_TOKEN')
+                        }
+                        # requests.post(...) # threadingで送るのがベスト
+                except Exception as e:
+                    print(f"Mail Error: {e}")
+
+                reply_message = TextSendMessage(text=f"✅ {report_type}連絡を受け付けました。\n\n🤖 {ai_reply}")
+
+            else:
+                # --- B. 届出ではない（雑談や質問）と判定された場合 ---
+                # 必要ならここで「時間割AI」に繋ぐこともできます
+                student = 学生.query.get(student_id)
+                student_name = student.学生名 if student else "学生"
+                
+                # スケジュールについて聞いてるかもしれないので、既存のAI回答機能に流す
+                ai_answer = ask_ai_about_schedule(received_text, student_name)
+                reply_message = TextSendMessage(text=ai_answer)
+
+    # 返信実行
+    if reply_message:
+        line_bot_api.reply_message(event.reply_token, reply_message)
 
         # ==========================================
         # 8. 返信実行
