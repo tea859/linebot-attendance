@@ -127,7 +127,7 @@
                 {% endif %}
             {% endwith %}
 
-            <form action="{{ url_for('student_register') }}" method="POST">
+            <form action="{{ url_for('web.student_register') }}" method="POST">
                 <div class="form-group">
                     <label for="student_id">学生ID (例: 222521301)</label>
                     <input type="text" id="student_id" name="student_id" required placeholder="学生証の番号を入力">
@@ -144,7 +144,7 @@
             </form>
 
             <div class="login-link">
-                <a href="{{ url_for('student_login') }}">すでに登録済みの方（ログイン）はこちら</a>
+                <a href="{{ url_for('web.student_login') }}">すでに登録済みの方（ログイン）はこちら</a>
             </div>
         </div>
     </div>
