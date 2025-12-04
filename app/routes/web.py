@@ -1570,6 +1570,8 @@ def my_portal_detail():
                            is_portal_view=True 
                            )
 
+# app/routes/web.py の schedule_monthly 関数をこれに置き換えてください
+
 @web_bp.route("/schedule_monthly", methods=["GET"])
 @login_required
 def schedule_monthly():
@@ -1605,7 +1607,7 @@ def schedule_monthly():
     first_day = date(year, month, 1)
     last_day = date(year, month, calendar.monthrange(year, month)[1])
     
-    # 1ヶ月分の授業計画をまとめて取得 (DBアクセス回数を削減)
+    # 1ヶ月分の授業計画をまとめて取得
     planned_dates = db.session.query(授業計画).filter(
         func.date(func.replace(授業計画.日付, '/', '-')).between(first_day, last_day)
     ).all()
@@ -1624,6 +1626,9 @@ def schedule_monthly():
                 day_info = {
                     "day": date_obj.day,
                     "date_str": date_obj.strftime('%Y/%m/%d'),
+                    # ▼▼▼ これが不足していました！ここを追加 ▼▼▼
+                    "date_query": date_obj.strftime('%Y-%m-%d'), 
+                    # ▲▲▲ 追加ここまで ▲▲▲
                     "weekday": weekday_name,
                     "is_holiday": (date_obj.weekday() >= 5) or (plan and plan.授業曜日 == 0),
                     "remark": "", 
@@ -1631,7 +1636,7 @@ def schedule_monthly():
                     "kiki_display": None,
                 }
                 
-                # --- ▼▼▼ 時間割取得ロジックの修正 (日別例外を優先) ▼▼▼ ---
+                # --- 時間割取得ロジック ---
                 classes_for_day = OrderedDict()
                 date_str_key = date_obj.strftime('%Y/%m/%d')
                 
@@ -1642,14 +1647,13 @@ def schedule_monthly():
                     .order_by(日別時間割.時限).all()
 
                 for exception, subject_info in daily_exceptions:
-                    # 日別例外を優先的に辞書に格納
                     name = subject_info.授業科目名 if subject_info else (exception.備考 if exception.備考 else "不明/空欄")
                     classes_for_day[exception.時限] = name
 
                 # 2. 授業計画が存在し、日別例外で埋まっていない時限をマスター時間割で埋める
                 if plan and plan.授業曜日 in YOBI_MAP_REVERSE and plan.授業曜日 != 0:
                     
-                    day_info["kiki_display"] = f"第{plan.期}期"
+                    day_info["kiki_display"] = str(plan.期) # 表示重複を防ぐため数字のみに
 
                     kiki_str = str(plan.期)
                     yobi_str = YOBI_MAP_REVERSE.get(plan.授業曜日)
@@ -1660,17 +1664,14 @@ def schedule_monthly():
                         .order_by(時間割.時限).all()
                     
                     for slot, subject_info in master_slots:
-                        if slot.時限 not in classes_for_day: # 日別例外でなければ
-                            # 5限は備考を優先表示、それ以外は授業科目名
+                        if slot.時限 not in classes_for_day:
                             if slot.時限 == 5:
                                 name = slot.備考 if slot.備考 else "休憩/空欄"
                             else:
                                 name = subject_info.授業科目名 if subject_info else "不明/空欄"
-                                
                             classes_for_day[slot.時限] = name
                     
                     if plan.備考: day_info["remark"] = plan.備考
-                # --- ▲▲▲ 時間割取得ロジックの修正ここまで ▲▲▲ ---
                 
                 # 3. 1〜5限の枠を埋める
                 periods = {p.時限: '-' for p in all_timetable}
