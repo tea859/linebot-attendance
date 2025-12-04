@@ -1,73 +1,51 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>連絡掲示板</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 24px 24px; color: #1e293b; }
-        .glass-card { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .card-late { border-left: 4px solid #f59e0b; }
-        .card-absent { border-left: 4px solid #ef4444; }
-    </style>
-</head>
-<body class="pb-20">
-    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center gap-3">
-                    <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2 rounded-lg shadow-lg"><i class="fas fa-school text-xl"></i></div>
-                    <span class="font-bold text-lg text-slate-800">Attendance System</span>
-                </div>
-                <a href="/" class="text-slate-500 hover:text-indigo-600 font-bold text-sm flex items-center gap-2 transition"><i class="fas fa-home"></i> ダッシュボードへ</a>
-            </div>
-        </div>
-    </nav>
+{% extends "base.html" %}
 
-    <div class="max-w-5xl mx-auto px-4 pt-8">
-        <header class="glass-card p-6 mb-8 flex items-center gap-4 animate-fade-in">
-            <div class="bg-gradient-to-br from-orange-500 to-rose-500 text-white p-3 rounded-xl shadow-lg"><i class="fas fa-bullhorn text-2xl"></i></div>
-            <div>
-                <h1 class="text-2xl font-bold text-slate-800">連絡掲示板</h1>
-                <p class="text-slate-500 text-sm">遅刻・欠席の連絡一覧</p>
-            </div>
-        </header>
+{% block title %}連絡掲示板{% endblock %}
 
-        {% if reports %}
-            <div class="flex items-center gap-2 mb-4 animate-fade-in">
-                <span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold">{{ reports|length }} 件</span>
-                <span class="text-slate-500 text-sm">未確認の連絡があります</span>
-            </div>
-            <div class="grid gap-4 animate-fade-in" style="animation-delay: 0.1s;">
-                {% for report, student_name in reports %}
-                <div class="glass-card p-5 flex flex-col md:flex-row justify-between items-start gap-4 {% if report.report_type == '欠席' %}card-absent{% else %}card-late{% endif %}">
-                    <div class="flex-grow">
-                        <div class="flex items-center gap-3 mb-2">
-                            <span class="text-xs font-bold px-2 py-1 rounded {% if report.report_type == '欠席' %}bg-rose-100 text-rose-700{% else %}bg-amber-100 text-amber-700{% endif %}">{{ report.report_type }}</span>
-                            <span class="text-xs text-slate-400"><i class="far fa-clock mr-1"></i>{{ report.report_date.strftime('%Y/%m/%d %H:%M') }}</span>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-800 mb-1">{{ student_name }} <span class="text-xs font-normal text-slate-400 ml-1">ID: {{ report.student_id }}</span></h3>
-                        <p class="text-sm text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-1"><span class="font-bold text-slate-400 text-xs mr-1">理由:</span> {{ report.reason }}</p>
-                    </div>
-                    <form method="POST" action="{{ url_for('web.resolve_alert', record_id=report.record_id) }}" onsubmit="return confirm('確認済みにしますか？');">
-                        <button class="bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition flex items-center gap-2">
-                            <i class="fas fa-check"></i> 確認
-                        </button>
-                    </form>
-                </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="glass-card p-12 text-center border-dashed border-2 border-slate-300 animate-fade-in">
-                <div class="text-emerald-200 text-6xl mb-4"><i class="fas fa-check-circle"></i></div>
-                <h3 class="text-xl font-bold text-slate-500">すべて確認済み</h3>
-                <p class="text-slate-400 text-sm">現在、未対応の連絡はありません。</p>
-            </div>
-        {% endif %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex items-center gap-3 mb-6">
+        <h2 class="text-2xl font-bold text-slate-700"><i class="fas fa-bell text-rose-500"></i> 連絡・通知掲示板</h2>
+        <span class="bg-rose-100 text-rose-600 px-3 py-1 rounded-full text-xs font-bold">管理者用</span>
     </div>
-</body>
-</html>
+
+    {% if reports %}
+        <div class="grid gap-4">
+            {% for report, student_name in reports %}
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row justify-between items-start gap-4 animate-in">
+                <div class="flex gap-4">
+                    <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0
+                        {{ 'bg-rose-100 text-rose-600' if report.report_type == '欠席' else 'bg-amber-100 text-amber-600' }}">
+                        <i class="fas {{ 'fa-user-times' if report.report_type == '欠席' else 'fa-running' }}"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-bold text-lg text-slate-800">{{ student_name }}</span>
+                            <span class="text-xs font-bold px-2 py-0.5 rounded border 
+                                {{ 'bg-rose-50 text-rose-600 border-rose-200' if report.report_type == '欠席' else 'bg-amber-50 text-amber-600 border-amber-200' }}">
+                                {{ report.report_type }}
+                            </span>
+                        </div>
+                        <p class="text-slate-600 font-bold mb-2">理由: {{ report.reason }}</p>
+                        <div class="text-xs text-slate-400">
+                            <i class="far fa-clock mr-1"></i>{{ report.report_date.strftime('%Y/%m/%d %H:%M') }} 受信
+                        </div>
+                    </div>
+                </div>
+                
+                <form action="{{ url_for('web.resolve_alert', record_id=report.record_id) }}" method="POST">
+                    <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md transition flex items-center gap-2">
+                        <i class="fas fa-check"></i> 確認済みにする
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-300">
+            <div class="text-6xl text-slate-200 mb-4"><i class="far fa-check-circle"></i></div>
+            <p class="text-slate-400 font-bold">現在、未確認の連絡はありません。</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
