@@ -33,6 +33,15 @@ if GEMINI_API_KEY:
 else:
     gemini_model = None
 
+print("----- AVAILABLE MODELS START -----")
+try:
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            print(f"Model Name: {m.name}")
+except Exception as e:
+    print(f"Error listing models: {e}")
+print("----- AVAILABLE MODELS END -----")
+
 admin_user_db = {
     "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
 }
