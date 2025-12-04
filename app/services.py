@@ -37,40 +37,62 @@ admin_user_db = {
     "1": User("1", "admin", os.environ.get('ADMIN_PASSWORD'))
 }
 
-def analyze_report_reason(text):
+# app/services.py に追加（または置き換え）
+import json
+
+def parse_message_with_ai(text):
     """
-    遅刻・欠席理由をGeminiで解析し、「分類」と「短い要約」を返す
-    例: "電車が遅れてて..." -> "【交通機関】電車遅延"
+    自由記述のメッセージを解析し、構造化データとして返す
+    戻り値: {
+        "is_report": True/False,  # 届出かどうか
+        "report_type": "遅刻" or "欠席" or None,
+        "category": "交通機関" etc,
+        "reason_summary": "電車遅延" etc,
+        "reply_text": "AIからの返信メッセージ"
+    }
     """
     if not gemini_model:
         return None
 
     prompt = f"""
-    あなたは学校の事務システムAIです。
-    学生から届いた「遅刻・欠席の理由」を読み、以下の4つのカテゴリのいずれかに分類し、さらに理由を5文字以内で要約してください。
-    
-    【カテゴリ候補】
-    - 体調不良
-    - 交通機関
-    - 寝坊
-    - 私用/その他
+    あなたは学校の勤怠管理システムのAIです。
+    学生から送られてきたメッセージを解析し、JSON形式で結果を返してください。
 
-    【入力テキスト】
+    【ルール】
+    1. メッセージが「遅刻」や「欠席」に関する報告であれば、`is_report`をtrueにしてください。
+       - 「遅れます」「休みます」「行けません」「寝坊した」などは報告です。
+       - 「こんにちは」「ありがとう」「時間割教えて」などは報告ではありません（false）。
+    2. 報告の場合、`report_type`は"遅刻"または"欠席"のどちらかに分類してください。
+    3. `category`は [体調不良, 交通機関, 寝坊, 就活, その他] から選んでください。
+    4. `reason_summary`は理由を5文字以内で要約してください。
+    5. `reply_text`には、学生への労いや了解の返信メッセージ（20文字以内・敬語）を作成してください。
+
+    【入力メッセージ】
     {text}
 
-    【出力フォーマット】
-    [カテゴリ] 要約
-    （例: [交通機関] 電車遅延、[体調不良] 38度の熱、[寝坊] 起床ミス）
-    余計な挨拶は不要です。フォーマット通りに出力してください。
+    【出力フォーマット(JSONのみ)】
+    {{
+        "is_report": boolean,
+        "report_type": "遅刻" or "欠席" or null,
+        "category": "文字列",
+        "reason_summary": "文字列",
+        "reply_text": "文字列"
+    }}
     """
 
     try:
         response = gemini_model.generate_content(prompt)
-        return response.text.strip()
+        cleaned_text = response.text.strip()
+        # JSONの前後に ```json ... ``` がつく場合があるので除去
+        if cleaned_text.startswith("```"):
+            cleaned_text = cleaned_text.split("\n", 1)[1]
+            if cleaned_text.endswith("```"):
+                cleaned_text = cleaned_text.rsplit("\n", 1)[0]
+        
+        return json.loads(cleaned_text)
     except Exception as e:
-        print(f"Gemini Analysis Error: {e}")
+        print(f"Gemini Parse Error: {e}")
         return None
-
 def save_image(base64_data, student_id):
     try:
         # データURLスキームを取り除く
