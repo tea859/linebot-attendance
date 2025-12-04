@@ -53,7 +53,7 @@
                         <h3 class="text-lg font-bold text-slate-800 mb-1">{{ student_name }} <span class="text-xs font-normal text-slate-400 ml-1">ID: {{ report.student_id }}</span></h3>
                         <p class="text-sm text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 mt-1"><span class="font-bold text-slate-400 text-xs mr-1">理由:</span> {{ report.reason }}</p>
                     </div>
-                    <form method="POST" action="{{ url_for('resolve_alert', record_id=report.record_id) }}" onsubmit="return confirm('確認済みにしますか？');">
+                    <form method="POST" action="{{ url_for('web.resolve_alert', record_id=report.record_id) }}" onsubmit="return confirm('確認済みにしますか？');">
                         <button class="bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition flex items-center gap-2">
                             <i class="fas fa-check"></i> 確認
                         </button>
