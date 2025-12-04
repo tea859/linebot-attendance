@@ -146,7 +146,7 @@
             </div>
             
             <div class="flex flex-col md:flex-row gap-3 items-end md:items-center">
-                <form action="{{ url_for('save_as_default') }}" method="POST" onsubmit="return confirm('現在の時間割設定を「復元用データ」として保存しますか？\n（以前のバックアップは上書きされます）');">
+                <form action="{{ url_for('web.save_as_default') }}" method="POST" onsubmit="return confirm('現在の時間割設定を「復元用データ」として保存しますか？\n（以前のバックアップは上書きされます）');">
                     <button type="submit" class="bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 hover:text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-2">
                         <i class="fas fa-save text-indigo-500"></i> バックアップ保存
                     </button>
@@ -239,7 +239,7 @@
             </div>
             
             <div class="mt-8 pt-4 border-t border-slate-100 flex justify-end">
-                <form action="{{ url_for('restore_schedule') }}" method="POST" onsubmit="return confirm('警告: 本当に初期状態（バックアップ）に戻しますか？\n現在の編集内容は失われます。');">
+                <form action="{{ url_for('web.restore_schedule') }}" method="POST" onsubmit="return confirm('警告: 本当に初期状態（バックアップ）に戻しますか？\n現在の編集内容は失われます。');">
                     <button type="submit" class="text-xs font-bold text-slate-400 hover:text-rose-500 transition flex items-center gap-1">
                         <i class="fas fa-undo"></i> デフォルト設定に復元する
                     </button>
