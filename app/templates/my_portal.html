@@ -1,329 +1,309 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+{% extends "base.html" %}
+
+{% block title %}学生ポータル{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 学生ポータル特有のデザイン */
+    body {
+        background-color: #f3e8ff;
+        background-image: radial-gradient(circle at 50% -20%, rgba(192, 132, 252, 0.4) 0%, transparent 70%);
+        background-attachment: fixed;
+    }
+    .glass-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+        border-radius: 20px;
+    }
+    .menu-btn {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .menu-btn:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.3);
+        border-color: #818cf8;
+    }
+    .donut-chart {
+        width: 80px; height: 80px;
+        border-radius: 50%;
+        position: relative;
+        display: flex; justify-content: center; align-items: center;
+        background: conic-gradient(#e2e8f0 0%, #e2e8f0 100%);
+    }
+    .donut-chart::before {
+        content: ""; position: absolute;
+        width: 68px; height: 68px;
+        background-color: white; border-radius: 50%;
+    }
+    .donut-text { position: relative; z-index: 10; line-height: 1; }
+    .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 12px; overflow: hidden; }
+    .schedule-table th, .schedule-table td { padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+    .schedule-table th { background: #f8fafc; color: #64748b; font-size: 0.85rem; font-weight: 700; }
+    .schedule-table td { height: 100px; vertical-align: middle; font-size: 0.9rem; transition: all 0.2s; }
+    .schedule-table td:last-child, .schedule-table th:last-child { border-right: none; }
+    .schedule-table tr:last-child td { border-bottom: none; }
+    .today-col { background-color: #eff6ff !important; border-bottom: 2px solid #3b82f6; }
+    .hidden-page { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
     
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f3e8ff;
-            background-image: 
-                radial-gradient(circle at 50% -20%, rgba(192, 132, 252, 0.4) 0%, transparent 70%),
-                radial-gradient(circle at 100% 100%, rgba(99, 102, 241, 0.4) 0%, transparent 60%);
-            background-attachment: fixed;
-            background-size: cover;
-            color: #334155;
-            min-height: 100vh;
-        }
-        /* グラスモーフィズム */
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
-            border-radius: 20px;
-        }
-
-        /* メニューボタン */
-        .menu-btn {
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-        .menu-btn:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.3);
-            border-color: #818cf8;
-        }
-        .menu-icon { font-size: 2rem; margin-bottom: 0.5rem; color: #6366f1; }
-
-        /* ドーナツチャート */
-        .donut-chart {
-            width: 80px; height: 80px;
-            border-radius: 50%;
-            position: relative;
-            display: flex; justify-content: center; align-items: center;
-            background: conic-gradient(#e2e8f0 0%, #e2e8f0 100%);
-        }
-        .donut-chart::before {
-            content: ""; position: absolute;
-            width: 68px; height: 68px;
-            background-color: white; border-radius: 50%;
-        }
-        .donut-text { position: relative; z-index: 10; line-height: 1; }
-        
-        /* 時間割テーブル */
-        .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: 12px; overflow: hidden; }
-        .schedule-table th, .schedule-table td { padding: 12px; text-align: center; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-        .schedule-table th { background: #f8fafc; color: #64748b; font-size: 0.85rem; font-weight: 700; }
-        .schedule-table td { height: 100px; vertical-align: middle; font-size: 0.9rem; transition: all 0.2s; }
-        .schedule-table td:last-child, .schedule-table th:last-child { border-right: none; }
-        .schedule-table tr:last-child td { border-bottom: none; }
-        .today-col { background-color: #eff6ff !important; border-bottom: 2px solid #3b82f6; }
-        
-        /* アニメーション */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        .hidden-page { display: none; }
-        @keyframes pulse-indigo { 0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(79, 70, 229, 0); } 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0); } }
-        .animate-pulse-indigo { animation: pulse-indigo 2s infinite; }
-    </style>
-</head>
-<body class="pb-10">
-
-    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div onclick="showPage('home')" class="flex items-center gap-3 cursor-pointer">
-                    <div class="bg-gradient-to-tr from-indigo-500 to-purple-500 text-white p-2 rounded-lg shadow-lg">
-                        <i class="fas fa-graduation-cap text-xl"></i>
-                    </div>
-                    <span class="font-bold text-xl tracking-tight text-slate-800">Student Portal</span>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="hidden md:flex flex-col items-end">
-                        <span class="text-xs text-slate-500 font-bold">LOGIN AS</span>
-                        <span class="text-sm font-bold text-indigo-600">{{ student_name }}</span>
-                    </div>
-                    <a href="{{ url_for('web.student_logout') }}" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-full text-sm font-bold transition flex items-center gap-2">
-                        <i class="fas fa-sign-out-alt"></i> <span class="hidden sm:inline">ログアウト</span>
-                    </a>
-                </div>
+    <div id="page-home" class="animate-in">
+        <div class="glass-card overflow-hidden mb-8">
+            <div class="bg-slate-50/50 border-b border-slate-100 p-4 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+                    <i class="fas fa-satellite-dish text-indigo-500"></i> PCカメラ認証
+                </h2>
+                <span class="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded font-bold">REMOTE</span>
             </div>
-        </div>
-    </nav>
-
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <div class="mb-6">
-                {% for category, message in messages %}
-                <div class="animate-fade-in p-4 rounded-xl shadow-lg flex items-start gap-3 mb-2
-                    {% if category == 'success' %} bg-emerald-50 text-emerald-800 border border-emerald-200
-                    {% elif category == 'error' %} bg-rose-50 text-rose-800 border border-rose-200
-                    {% else %} bg-blue-50 text-blue-800 border border-blue-200 {% endif %}">
-                    <i class="fas fa-info-circle mt-1"></i>
-                    <p class="font-medium">{{ message }}</p>
+            <div class="p-8 text-center">
+                <div id="step1">
+                    <h3 class="text-2xl font-bold text-slate-800 mb-2">出席登録を始める</h3>
+                    <p class="text-slate-500 text-sm mb-6">PCのカメラプログラムを起動して、<br class="hidden sm:inline">ボタンを押してください。</p>
+                    <button onclick="startRemoteAuth()" class="py-4 px-10 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xl font-bold rounded-full shadow-lg shadow-indigo-200 hover:scale-105 transition flex items-center justify-center gap-3 mx-auto">
+                        <i class="fas fa-power-off"></i> 認証スタート
+                    </button>
                 </div>
-                {% endfor %}
+                <div id="step2" class="hidden py-4">
+                    <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-600 border-t-transparent mx-auto mb-4"></div>
+                    <h3 class="text-xl font-bold text-indigo-600 mb-2">PCと通信中...</h3>
+                    <p class="text-slate-500">カメラを見てください</p>
                 </div>
-            {% endif %}
-        {% endwith %}
-
-        <div id="page-home" class="animate-fade-in">
-            <div class="glass-card overflow-hidden mb-8">
-                <div class="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center">
-                    <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
-                        <i class="fas fa-satellite-dish text-indigo-500"></i> PCカメラ認証
-                    </h2>
-                    <span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded font-bold">REMOTE MODE</span>
-                </div>
-                <div class="p-8 text-center">
-                    <div id="step1">
-                        <div class="mb-6">
-                            <h3 class="text-2xl font-bold text-slate-800 mb-2">出席登録を始める</h3>
-                            <p class="text-slate-500 text-sm">PCでPythonプログラム(<code class="bg-slate-100 px-1 rounded text-indigo-600">camera_client.py</code>)を起動し、<br class="hidden sm:inline">下のボタンを押してください。</p>
-                        </div>
-                        <button onclick="startRemoteAuth()" class="py-4 px-10 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-xl font-bold rounded-full shadow-xl shadow-indigo-200 transform transition hover:-translate-y-1 flex items-center justify-center gap-3 mx-auto animate-pulse-indigo"><i class="fas fa-power-off"></i> 認証スタート</button>
-                    </div>
-                    <div id="step2" class="hidden py-4">
-                        <div class="flex justify-center mb-6"><div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-indigo-600"></div></div>
-                        <h3 class="text-xl font-bold text-indigo-600 mb-2">PCと通信中...</h3>
-                        <p class="text-slate-500 animate-pulse">PCのカメラを見てください！</p>
-                    </div>
-                    <div id="step3" class="hidden py-4">
-                        <div class="text-6xl text-emerald-500 mb-4 animate-bounce"><i class="fas fa-check-circle"></i></div>
-                        <h2 class="text-2xl font-bold text-emerald-600 mb-2">出席完了！</h2>
-                        <button onclick="location.reload()" class="text-indigo-500 font-bold underline hover:text-indigo-700 mt-2">画面を更新する</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div onclick="showPage('report')" class="menu-btn group">
-                    <div class="menu-icon group-hover:scale-110 transition"><i class="fas fa-chart-pie"></i></div>
-                    <div class="font-bold text-slate-700">出席レポート</div>
-                    <div class="text-xs text-slate-400 mt-1">出席率・詳細確認</div>
-                </div>
-                <div onclick="showPage('schedule')" class="menu-btn group">
-                    <div class="menu-icon group-hover:scale-110 transition text-emerald-500"><i class="far fa-calendar-alt"></i></div>
-                    <div class="font-bold text-slate-700">時間割</div>
-                    <div class="text-xs text-slate-400 mt-1">今週・月間予定</div>
-                </div>
-                <div onclick="showPage('settings')" class="menu-btn group">
-                    <div class="menu-icon group-hover:scale-110 transition text-slate-500"><i class="fas fa-cog"></i></div>
-                    <div class="font-bold text-slate-700">設定</div>
-                    <div class="text-xs text-slate-400 mt-1">メールアドレス変更</div>
+                <div id="step3" class="hidden py-4">
+                    <div class="text-5xl text-emerald-500 mb-4 animate-bounce"><i class="fas fa-check-circle"></i></div>
+                    <h2 class="text-2xl font-bold text-emerald-600">出席完了！</h2>
+                    <button onclick="location.reload()" class="text-indigo-500 underline mt-4 hover:text-indigo-700">更新する</button>
                 </div>
             </div>
         </div>
 
-        <div id="page-report" class="hidden-page animate-fade-in">
-            <div class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 transition w-fit" onclick="showPage('home')">
-                <i class="fas fa-arrow-left"></i> <span class="font-bold">メニューに戻る</span>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div onclick="showPage('report')" class="menu-btn group">
+                <div class="text-3xl text-indigo-500 mb-2 group-hover:scale-110 transition"><i class="fas fa-chart-pie"></i></div>
+                <div class="font-bold text-slate-700">出席レポート</div>
+                <div class="text-xs text-slate-400 mt-1">詳細確認</div>
             </div>
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-chart-pie text-indigo-500"></i> 出席状況</h3>
-                <div class="flex space-x-1">
-                    {% for k in kikis %}
-                    <a href="/my_portal?kiki={{ k }}#report" class="px-3 py-1 text-xs font-bold rounded-full border transition {% if k==selected_kiki %}bg-indigo-600 text-white border-indigo-600{% else %}bg-white text-slate-500 hover:bg-slate-50{% endif %}">第{{ k }}期</a>
-                    {% endfor %}
-                </div>
+            <div onclick="showPage('schedule')" class="menu-btn group">
+                <div class="text-3xl text-emerald-500 mb-2 group-hover:scale-110 transition"><i class="far fa-calendar-alt"></i></div>
+                <div class="font-bold text-slate-700">時間割</div>
+                <div class="text-xs text-slate-400 mt-1">今週の予定</div>
             </div>
-            {% if report_data %}
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    {% for row in report_data %}
-                    {% set color = "#f43f5e" %} {% set text_c = "text-rose-500" %}
-                    {% if row.attendance_rate >= 80 %} {% set color = "#10b981" %} {% set text_c = "text-emerald-500" %}
-                    {% elif row.attendance_rate >= 50 %} {% set color = "#f59e0b" %} {% set text_c = "text-amber-500" %} {% endif %}
-                    <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm relative overflow-hidden">
-                        <div class="absolute top-0 left-0 w-1 h-full" style="background-color: {{ color }};"></div>
-                        <div class="flex justify-between items-start mb-4 pl-2">
-                            <h4 class="font-bold text-slate-700 w-2/3 leading-tight">{{ row.subject }}</h4>
-                            <div class="donut-chart flex-shrink-0" style="background: conic-gradient({{ color }} {{ row.attendance_rate }}%, #f1f5f9 0);">
-                                <div class="donut-text"><span class="text-lg font-black {{ text_c }}">{{ row.attendance_rate }}<small class="text-[10px]">%</small></span></div>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-3 gap-1 text-center bg-slate-50 rounded-lg p-2 text-xs mb-3 ml-2">
-                            <div><span class="block text-slate-400 font-bold">出</span><b class="text-emerald-600 text-sm">{{ row.attendance_count }}</b></div>
-                            <div><span class="block text-slate-400 font-bold">遅</span><b class="text-amber-600 text-sm">{{ row.tardy_count }}</b></div>
-                            <div><span class="block text-slate-400 font-bold">欠</span><b class="text-rose-600 text-sm">{{ row.absent_count }}</b></div>
-                        </div>
-                        <div class="text-right ml-2">
-                            <a href="/my_portal_detail?kiki={{ selected_kiki }}&subject={{ row.subject }}" class="text-xs font-bold text-indigo-500 hover:text-indigo-700">詳細レポート <i class="fas fa-chevron-right"></i></a>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="text-center py-8 text-slate-400 text-sm bg-white rounded-xl border border-dashed border-slate-300 mb-8">データなし</div>
-            {% endif %}
-            <div class="glass-card p-6 rounded-2xl">
-                <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-seedling text-emerald-500"></i> 出席の記録 (Heatmap)</h3>
-                <div class="overflow-x-auto"><div id="heatmap-container" class="flex gap-1" style="min-width: 600px;"></div></div>
+            <div onclick="showPage('settings')" class="menu-btn group">
+                <div class="text-3xl text-slate-400 mb-2 group-hover:scale-110 transition"><i class="fas fa-cog"></i></div>
+                <div class="font-bold text-slate-700">設定</div>
+                <div class="text-xs text-slate-400 mt-1">メール変更</div>
             </div>
         </div>
-
-        <div id="page-schedule" class="hidden-page animate-fade-in">
-            <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-2 cursor-pointer text-slate-500 hover:text-indigo-600 transition" onclick="showPage('home')">
-                    <i class="fas fa-arrow-left"></i> <span class="font-bold">メニュー</span>
-                </div>
-                <a href="{{ url_for('web.schedule_monthly') }}" class="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-50 transition flex items-center gap-2">
-                    <i class="far fa-calendar-alt"></i> 月間予定を見る
-                </a>
-            </div>
-            <div class="glass-card rounded-2xl p-6">
-                <h3 class="text-xl font-bold text-slate-700 mb-1 flex items-center gap-2"><i class="fas fa-calendar-week text-indigo-500"></i> 今週の時間割</h3>
-                <p class="text-xs text-slate-400 mb-4 ml-1">※変更等はリアルタイムに反映されます</p>
-                <div class="overflow-x-auto">
-                    <table class="schedule-table min-w-[600px]">
-                        <thead>
-                            <tr>
-                                <th class="w-16"></th>
-                                {% for i in range(5) %}
-                                    {% set day = 曜日順[i] %} {% set date = week_dates[i] %} {% set is_today = (date.strftime('%Y-%m-%d') == now_date_str) %}
-                                    <th class="{{ 'today-col text-indigo-600' if is_today else '' }}">
-                                        <div class="flex flex-col"><span>{{ day }}</span><span class="text-[10px] font-normal opacity-70">{{ date.strftime('%m/%d') }}</span></div>
-                                    </th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for jigen in 時限一覧 %}
-                            <tr>
-                                <td class="bg-slate-50 text-slate-500 font-bold">{{ jigen }}限</td>
-                                {% for yobi in 曜日順 %}
-                                    {% set cell = schedule_grid[jigen][yobi] %} {% set is_today = (cell.date_str == now_date_str) %}
-                                    <td class="{{ 'today-col' if is_today else '' }} {{ 'bg-amber-50' if cell.is_exception else '' }}">
-                                        {% if cell.is_empty %}
-                                            <span class="text-slate-300 text-xl font-light">-</span>
-                                        {% else %}
-                                            <div class="flex flex-col h-full justify-center relative">
-                                                {% if cell.is_exception %}<span class="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>{% endif %}
-                                                <span class="font-bold text-slate-700 text-sm mb-1 leading-tight line-clamp-2">{{ cell.display_text }}</span>
-                                                {% if not cell.is_empty and jigen != 5 %}
-                                                    {% if cell.teacher %}<span class="text-[10px] text-slate-500 mb-0.5"><i class="fas fa-user-tie mr-1"></i>{{ cell.teacher }}</span>{% endif %}
-                                                    {% if cell.room %}<span class="text-[10px] text-slate-400 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block w-fit mx-auto">{{ cell.room }}</span>{% endif %}
-                                                {% endif %}
-                                            </div>
-                                        {% endif %}
-                                    </td>
-                                {% endfor %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div id="page-settings" class="hidden-page animate-fade-in">
-            <div class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 transition w-fit" onclick="showPage('home')">
-                <i class="fas fa-arrow-left"></i> <span class="font-bold">メニューに戻る</span>
-            </div>
-            <div class="glass-card rounded-2xl p-6 max-w-xl mx-auto">
-                <h3 class="text-xl font-bold text-slate-700 mb-6 border-b pb-2"><i class="fas fa-cog text-slate-400"></i> 設定</h3>
-                <form action="/update_parent_email" method="POST" class="space-y-6">
-                    <div>
-                        <label class="block text-sm font-bold text-slate-600 mb-2">保護者メールアドレス (通知用)</label>
-                        <p class="text-xs text-slate-400 mb-2">遅刻・欠席連絡があった際、このアドレスに自動で通知が送信されます。</p>
-                        <input type="email" name="parent_email" value="{{ current_user.parent_email or '' }}" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                    </div>
-                    <div class="text-right">
-                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition transform hover:-translate-y-1">保存する</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
     </div>
 
-    <script>
-        function showPage(pageId) {
-            ['home', 'report', 'schedule', 'settings'].forEach(id => { document.getElementById(`page-${id}`).classList.add('hidden-page'); });
-            const target = document.getElementById(`page-${pageId}`);
+    <div id="page-report" class="hidden-page animate-in">
+        <div class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 transition w-fit" onclick="showPage('home')">
+            <i class="fas fa-arrow-left"></i> <span class="font-bold">メニューに戻る</span>
+        </div>
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-slate-700 flex items-center gap-2"><i class="fas fa-chart-pie text-indigo-500"></i> 出席状況</h3>
+            <div class="flex space-x-1">
+                {% for k in kikis %}
+                <a href="{{ url_for('web.my_portal', kiki=k) }}#report" class="px-3 py-1 text-xs font-bold rounded-full border transition {% if k==selected_kiki %}bg-indigo-600 text-white border-indigo-600{% else %}bg-white text-slate-500 hover:bg-slate-50{% endif %}">第{{ k }}期</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if report_data %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                {% for row in report_data %}
+                {% set color = "#f43f5e" %} {% set text_c = "text-rose-500" %}
+                {% if row.attendance_rate >= 80 %} {% set color = "#10b981" %} {% set text_c = "text-emerald-500" %}
+                {% elif row.attendance_rate >= 50 %} {% set color = "#f59e0b" %} {% set text_c = "text-amber-500" %} {% endif %}
+                <div class="bg-white rounded-xl p-5 border border-slate-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full" style="background-color: {{ color }};"></div>
+                    <div class="flex justify-between items-start mb-4 pl-2">
+                        <h4 class="font-bold text-slate-700 w-2/3 leading-tight">{{ row.subject }}</h4>
+                        <div class="donut-chart flex-shrink-0" style="background: conic-gradient({{ color }} {{ row.attendance_rate }}%, #f1f5f9 0);">
+                            <div class="donut-text"><span class="text-lg font-black {{ text_c }}">{{ row.attendance_rate }}<small class="text-[10px]">%</small></span></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1 text-center bg-slate-50 rounded-lg p-2 text-xs mb-3 ml-2">
+                        <div><span class="block text-slate-400 font-bold">出</span><b class="text-emerald-600 text-sm">{{ row.attendance_count }}</b></div>
+                        <div><span class="block text-slate-400 font-bold">遅</span><b class="text-amber-600 text-sm">{{ row.tardy_count }}</b></div>
+                        <div><span class="block text-slate-400 font-bold">欠</span><b class="text-rose-600 text-sm">{{ row.absent_count }}</b></div>
+                    </div>
+                    <div class="text-right ml-2">
+                        <a href="{{ url_for('web.my_portal_detail', kiki=selected_kiki, subject=row.subject) }}" class="text-xs font-bold text-indigo-500 hover:text-indigo-700">詳細レポート <i class="fas fa-chevron-right"></i></a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center py-8 text-slate-400 text-sm bg-white rounded-xl border border-dashed border-slate-300 mb-8">データなし</div>
+        {% endif %}
+        
+        <div class="glass-card p-6 rounded-2xl">
+            <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2"><i class="fas fa-seedling text-emerald-500"></i> Heatmap</h3>
+            <div class="overflow-x-auto"><div id="heatmap-container" class="flex gap-1" style="min-width: 600px;"></div></div>
+        </div>
+    </div>
+    
+    <div id="page-schedule" class="hidden-page animate-in">
+         <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-2 cursor-pointer text-slate-500 hover:text-indigo-600 transition" onclick="showPage('home')">
+                <i class="fas fa-arrow-left"></i> <span class="font-bold">メニュー</span>
+            </div>
+            <a href="{{ url_for('web.schedule_monthly') }}" class="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-50 transition flex items-center gap-2">
+                <i class="far fa-calendar-alt"></i> 月間予定
+            </a>
+        </div>
+        <div class="glass-card rounded-2xl p-6">
+            <h3 class="text-xl font-bold text-slate-700 mb-1 flex items-center gap-2"><i class="fas fa-calendar-week text-indigo-500"></i> 今週の時間割</h3>
+            <div class="overflow-x-auto">
+                <table class="schedule-table min-w-[600px] mt-4">
+                    <thead>
+                        <tr>
+                            <th class="w-16"></th>
+                            {% for i in range(5) %}
+                                {% set day = 曜日順[i] %} {% set date = week_dates[i] %} {% set is_today = (date.strftime('%Y-%m-%d') == now_date_str) %}
+                                <th class="{{ 'today-col text-indigo-600' if is_today else '' }}">
+                                    <div class="flex flex-col"><span>{{ day }}</span><span class="text-[10px] font-normal opacity-70">{{ date.strftime('%m/%d') }}</span></div>
+                                </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for jigen in 時限一覧 %}
+                        <tr>
+                            <td class="bg-slate-50 text-slate-500 font-bold">{{ jigen }}限</td>
+                            {% for yobi in 曜日順 %}
+                                {% set cell = schedule_grid[jigen][yobi] %} {% set is_today = (cell.date_str == now_date_str) %}
+                                <td class="{{ 'today-col' if is_today else '' }} {{ 'bg-amber-50' if cell.is_exception else '' }}">
+                                    {% if cell.is_empty %}
+                                        <span class="text-slate-300 text-xl font-light">-</span>
+                                    {% else %}
+                                        <div class="flex flex-col h-full justify-center relative">
+                                            {% if cell.is_exception %}<span class="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full"></span>{% endif %}
+                                            <span class="font-bold text-slate-700 text-sm mb-1 leading-tight line-clamp-2">{{ cell.display_text }}</span>
+                                            {% if not cell.is_empty and jigen != 5 %}
+                                                {% if cell.teacher %}<span class="text-[10px] text-slate-500 mb-0.5"><i class="fas fa-user-tie mr-1"></i>{{ cell.teacher }}</span>{% endif %}
+                                                {% if cell.room %}<span class="text-[10px] text-slate-400 bg-slate-100/80 rounded px-1.5 py-0.5 inline-block w-fit mx-auto">{{ cell.room }}</span>{% endif %}
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="page-settings" class="hidden-page animate-in">
+        <div class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 transition w-fit" onclick="showPage('home')">
+            <i class="fas fa-arrow-left"></i> <span class="font-bold">メニューに戻る</span>
+        </div>
+        <div class="glass-card rounded-2xl p-6 max-w-xl mx-auto">
+            <h3 class="text-xl font-bold text-slate-700 mb-6 border-b pb-2"><i class="fas fa-cog text-slate-400"></i> 設定</h3>
+            <form action="{{ url_for('web.update_parent_email') }}" method="POST" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-slate-600 mb-2">保護者メールアドレス (通知用)</label>
+                    <p class="text-xs text-slate-400 mb-2">遅刻・欠席連絡があった際、このアドレスに自動で通知が送信されます。</p>
+                    <input type="email" name="parent_email" value="{{ current_user.parent_email or '' }}" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                </div>
+                <div class="text-right">
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition transform hover:-translate-y-1">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ページ切り替えロジック
+    function showPage(pageId) {
+        ['home', 'report', 'schedule', 'settings'].forEach(id => { 
+            const el = document.getElementById(`page-${id}`);
+            if(el) {
+                el.classList.add('hidden-page'); 
+                el.classList.remove('animate-in');
+            }
+        });
+        const target = document.getElementById(`page-${pageId}`);
+        if(target) {
             target.classList.remove('hidden-page');
-            target.classList.remove('animate-fade-in'); void target.offsetWidth; target.classList.add('animate-fade-in');
-            if(pageId === 'home') history.replaceState(null, null, ' '); else history.replaceState(null, null, `#${pageId}`);
+            void target.offsetWidth; // リフロー
+            target.classList.add('animate-in');
+            if(pageId === 'home') history.replaceState(null, null, ' '); 
+            else history.replaceState(null, null, `#${pageId}`);
         }
-        window.addEventListener('load', () => { const hash = window.location.hash.replace('#', ''); if(['report', 'schedule', 'settings'].includes(hash)) { showPage(hash); } });
+    }
+    
+    // URLハッシュでの初期表示制御
+    window.addEventListener('load', () => { 
+        const hash = window.location.hash.replace('#', ''); 
+        if(['report', 'schedule', 'settings'].includes(hash)) { showPage(hash); } 
+    });
 
-        function startRemoteAuth() {
-            document.getElementById('step1').classList.add('hidden'); document.getElementById('step2').classList.remove('hidden');
-            fetch('/api/trigger_remote_auth', { method: 'POST' }).then(res => res.json()).then(data => { if(data.status === 'success') { pollForResult(); } else { alert("エラー: " + data.message); resetScreen(); } }).catch(err => { console.error(err); alert("通信エラーが発生しました"); resetScreen(); });
-        }
-        function pollForResult() {
-            const intervalId = setInterval(() => { fetch('/api/check_remote_result').then(res => res.json()).then(data => { if (data.status === 'success') { clearInterval(intervalId); document.getElementById('step2').classList.add('hidden'); document.getElementById('step3').classList.remove('hidden'); } }).catch(err => console.error("待機中エラー:", err)); }, 1000);
-            setTimeout(() => { clearInterval(intervalId); if (document.getElementById('step3').classList.contains('hidden')) { alert("タイムアウト"); resetScreen(); } }, 30000); 
-        }
-        function resetScreen() { document.getElementById('step1').classList.remove('hidden'); document.getElementById('step2').classList.add('hidden'); document.getElementById('step3').classList.add('hidden'); }
+    // リモート認証ロジック
+    function startRemoteAuth() {
+        document.getElementById('step1').classList.add('hidden'); 
+        document.getElementById('step2').classList.remove('hidden');
+        fetch("{{ url_for('api.api_trigger_remote_auth') }}", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { 
+                if(data.status === 'success') { pollForResult(); } 
+                else { alert("エラー: " + data.message); resetScreen(); } 
+            })
+            .catch(err => { console.error(err); alert("通信エラー"); resetScreen(); });
+    }
+    
+    function pollForResult() {
+        const intervalId = setInterval(() => { 
+            fetch("{{ url_for('api.api_check_remote_result') }}")
+                .then(res => res.json())
+                .then(data => { 
+                    if (data.status === 'success') { 
+                        clearInterval(intervalId); 
+                        document.getElementById('step2').classList.add('hidden'); 
+                        document.getElementById('step3').classList.remove('hidden'); 
+                    } 
+                }); 
+        }, 1000);
+        setTimeout(() => { clearInterval(intervalId); if(document.getElementById('step3').classList.contains('hidden')) { alert("タイムアウト"); resetScreen(); } }, 30000);
+    }
+    function resetScreen() { 
+        document.getElementById('step1').classList.remove('hidden'); 
+        document.getElementById('step2').classList.add('hidden'); 
+        document.getElementById('step3').classList.add('hidden'); 
+    }
 
-        const heatmapData = {{ heatmap_data | tojson }};
-        const container = document.getElementById('heatmap-container');
-        const today = new Date(); const startDate = new Date(); startDate.setDate(today.getDate() - 365);
-        let html = '<div class="flex items-end gap-[2px] h-16 w-full">';
-        for(let d = new Date(startDate); d <= today; d.setDate(d.getDate()+1)) {
-            const dateStr = d.toISOString().split('T')[0]; const count = heatmapData[dateStr] || 0;
-            let color="bg-slate-200", height="h-1"; if(count>0) { height = count>=4?"h-full":(count>=2?"h-2/3":"h-1/3"); color = count>=4?"bg-emerald-700":(count>=2?"bg-emerald-500":"bg-emerald-300"); }
-            html += `<div class="w-1 ${height} ${color} rounded-t-sm" title="${dateStr}: ${count}回"></div>`;
-        }
-        html += '</div>'; container.innerHTML = html;
-    </script>
-</body>
-</html>
+    // ヒートマップ生成
+    const heatmapData = {{ heatmap_data | tojson }};
+    const container = document.getElementById('heatmap-container');
+    const today = new Date(); const startDate = new Date(); startDate.setDate(today.getDate() - 365);
+    let html = '<div class="flex items-end gap-[2px] h-16 w-full">';
+    for(let d = new Date(startDate); d <= today; d.setDate(d.getDate()+1)) {
+        const dateStr = d.toISOString().split('T')[0]; const count = heatmapData[dateStr] || 0;
+        let color="bg-slate-200", height="h-1"; if(count>0) { height = count>=4?"h-full":(count>=2?"h-2/3":"h-1/3"); color = count>=4?"bg-emerald-700":(count>=2?"bg-emerald-500":"bg-emerald-300"); }
+        html += `<div class="w-1 ${height} ${color} rounded-t-sm" title="${dateStr}: ${count}回"></div>`;
+    }
+    html += '</div>'; container.innerHTML = html;
+</script>
+{% endblock %}
