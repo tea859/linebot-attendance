@@ -1,138 +1,95 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>出席登録</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 24px 24px; color: #1e293b; }
-        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border-radius: 16px; }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
-        .badge-出席 { background: #dcfce7; color: #166534; }
-        .badge-遅刻 { background: #fef9c3; color: #854d0e; }
-        .badge-欠席 { background: #fee2e2; color: #991b1b; }
-    </style>
-</head>
-<body class="pb-20">
+{% extends "base.html" %}
 
-    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center gap-3">
-                    <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2 rounded-lg shadow-lg"><i class="fas fa-school text-xl"></i></div>
-                    <span class="font-bold text-lg text-slate-800">Attendance System</span>
-                </div>
-                <a href="/" class="text-slate-500 hover:text-indigo-600 font-bold text-sm flex items-center gap-2 transition"><i class="fas fa-home"></i> ダッシュボードへ</a>
-            </div>
-        </div>
-    </nav>
+{% block title %}出席登録{% endblock %}
 
-    <div class="max-w-7xl mx-auto px-4 pt-8">
-        <header class="glass-card p-6 mb-8 flex items-center gap-4 animate-fade-in">
-            <div class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-3 rounded-xl shadow-lg"><i class="fas fa-clipboard-check text-2xl"></i></div>
-            <div>
-                <h1 class="text-2xl font-bold text-slate-800">出席登録</h1>
-                <p class="text-slate-500 text-sm">手動での出席入力と履歴確認</p>
-            </div>
-        </header>
-
-        <nav class="flex space-x-2 mb-6 animate-fade-in">
-            {% for kiki_num in kikis %}
-            <a href="/attendance?kiki={{ kiki_num }}" class="px-6 py-2 rounded-full font-bold text-sm transition border {% if kiki_num == selected_kiki %}bg-indigo-600 text-white border-indigo-600 shadow{% else %}bg-white text-slate-500 border-slate-200 hover:bg-slate-50{% endif %}">
-                第{{ kiki_num }}期
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-slate-700 flex items-center gap-2">
+            <i class="fas fa-clipboard-check text-blue-600"></i> 出席登録・記録
+        </h2>
+        
+        <div class="flex bg-white rounded-lg shadow-sm border p-1">
+            {% for k in kikis %}
+            <a href="{{ url_for('web.attendance', kiki=k) }}" 
+               class="px-4 py-1 rounded text-sm font-bold transition {{ 'bg-blue-600 text-white shadow' if k == selected_kiki else 'text-slate-500 hover:bg-slate-50' }}">
+                第{{ k }}期
             </a>
             {% endfor %}
-        </nav>
+        </div>
+    </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in" style="animation-delay: 0.1s;">
-            
-            <div class="space-y-6">
-                <div class="glass-card p-6">
-                    <h2 class="text-lg font-bold text-slate-700 mb-4"><i class="fas fa-pen mr-2 text-indigo-500"></i> 手動登録</h2>
-                    <form method="POST" action="/attendance?kiki={{ selected_kiki }}">
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">学生</label>
-                                <select name="student_id" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                                    {% for id, name in students %}
-                                    <option value="{{ id }}">{{ name }} ({{ id }})</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">授業</label>
-                                <select name="class_id" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                                    {% for id, name in classes %}
-                                    <option value="{{ id }}">{{ name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">時限</label>
-                                <select name="period" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg">
-                                    <option value="1">1限</option>
-                                    <option value="2">2限</option>
-                                    <option value="3">3限</option>
-                                    <option value="4">4限</option>
-                                </select>
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg transition">
-                                登録する
-                            </button>
-                        </div>
-                    </form>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 h-fit">
+            <h3 class="font-bold text-slate-600 mb-4 border-b pb-2">手動登録</h3>
+            <form method="POST" action="{{ url_for('web.attendance', kiki=selected_kiki) }}" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">学生</label>
+                    <select name="student_id" class="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        {% for id, name in students %}
+                        <option value="{{ id }}">{{ name }} ({{ id }})</option>
+                        {% endfor %}
+                    </select>
                 </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">授業</label>
+                    <select name="class_id" class="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        {% for cls in classes %}
+                        <option value="{{ cls.授業ID }}">{{ cls.授業科目名 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">時限</label>
+                    <select name="period" class="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="1">1限</option>
+                        <option value="2">2限</option>
+                        <option value="3">3限</option>
+                        <option value="4">4限</option>
+                        <option value="5">5限</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition transform hover:-translate-y-0.5">
+                    登録する
+                </button>
+            </form>
+        </div>
 
-                {% if sensor %}
-                <div class="glass-card p-6 bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100">
-                    <h3 class="text-sm font-bold text-amber-800 mb-2"><i class="fas fa-wifi mr-1"></i> センサー情報</h3>
-                    <div class="grid grid-cols-2 gap-2 text-center">
-                        <div class="bg-white/60 p-2 rounded border border-amber-100"><span class="text-xs block text-amber-600">温度</span><b class="text-lg">{{ sensor.temperature }}°C</b></div>
-                        <div class="bg-white/60 p-2 rounded border border-amber-100"><span class="text-xs block text-amber-600">湿度</span><b class="text-lg">{{ sensor.humidity }}%</b></div>
-                    </div>
-                </div>
-                {% endif %}
+        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+            <div class="p-4 bg-slate-50 border-b border-slate-100 font-bold text-slate-600">
+                <i class="fas fa-history mr-2"></i>直近の出席記録 (第{{ selected_kiki }}期)
             </div>
-
-            <div class="lg:col-span-2 glass-card overflow-hidden h-fit">
-                <div class="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <h3 class="font-bold text-slate-700">最新の出席記録</h3>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-slate-100">
-                        <thead class="bg-white">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">学生名</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">授業ID</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">時限</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">時刻</th>
-                                <th class="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">状態</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-50 bg-white">
-                            {% for name, class_id, timestamp, status, period in attendance %}
-                            <tr class="hover:bg-slate-50">
-                                <td class="px-6 py-3 text-sm font-bold text-slate-700">{{ name }}</td>
-                                <td class="px-6 py-3 text-sm text-slate-500">{{ class_id }}</td>
-                                <td class="px-6 py-3 text-sm text-slate-500">{{ period }}</td>
-                                <td class="px-6 py-3 text-sm text-slate-500 font-mono">{{ timestamp.strftime('%m/%d %H:%M') }}</td>
-                                <td class="px-6 py-3">
-                                    <span class="badge badge-{{ status }}">{{ status }}</span>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">記録がありません</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="overflow-y-auto flex-1">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-white sticky top-0 shadow-sm z-10">
+                        <tr>
+                            <th class="p-3 text-xs text-slate-400">日時</th>
+                            <th class="p-3 text-xs text-slate-400">学生名</th>
+                            <th class="p-3 text-xs text-slate-400">時限</th>
+                            <th class="p-3 text-xs text-slate-400">状態</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50 text-sm">
+                        {% for row in attendance %}
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-3 text-slate-600 font-mono text-xs">{{ row.出席時刻.strftime('%m/%d %H:%M') }}</td>
+                            <td class="p-3 font-bold text-slate-700">{{ row.学生名 }}</td>
+                            <td class="p-3 text-slate-500">{{ row.時限 }}限</td>
+                            <td class="p-3">
+                                {% if row.状態 == '出席' %}
+                                    <span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-bold">出席</span>
+                                {% elif row.状態 == '遅刻' %}
+                                    <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">遅刻</span>
+                                {% else %}
+                                    <span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full text-xs font-bold">{{ row.状態 }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+{% endblock %}
