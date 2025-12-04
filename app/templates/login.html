@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者ログイン</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* 動く背景グラデーション */
+        body {
+            background: linear-gradient(-45deg, #e0f2fe, #e9d5ff, #fae8ff, #f0f9ff);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* フォームの出現アニメーション */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            animation: fadeInUp 0.8s ease-out forwards;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+
+        /* 入力欄のアニメーション */
+        .input-group {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .input-field:focus {
+            transform: scale(1.02);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        /* ボタンのキラッと光るエフェクト */
+        .btn-shine {
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-shine::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        .btn-shine:hover::after {
+            left: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="w-full max-w-md p-4">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6 space-y-2 animate-bounce">
+                {% for category, message in messages %}
+                    <div class="p-4 rounded-lg shadow-lg text-sm font-bold text-center
+                        {% if category == 'success' %} bg-green-100 text-green-700 border border-green-400
+                        {% elif category == 'error' %} bg-red-100 text-red-700 border border-red-400
+                        {% else %} bg-blue-100 text-blue-700 {% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="/login" class="login-card px-10 py-12">
+            <div class="text-center mb-10">
+                <div class="bg-blue-600 text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg text-2xl">
+                    <i class="fas fa-user-shield"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-gray-800 tracking-wide">Admin Login</h1>
+                <p class="text-gray-500 text-sm mt-2">管理者用アカウントでログインしてください</p>
+            </div>
+
+            <div class="space-y-6">
+                <div class="input-group">
+                    <label for="username" class="block text-gray-700 text-sm font-bold mb-2 ml-1">ユーザー名</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                            <i class="fas fa-user"></i>
+                        </span>
+                        <input type="text" name="username" id="username" required
+                               class="input-field w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
+                               placeholder="Enter username">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="password" class="block text-gray-700 text-sm font-bold mb-2 ml-1">パスワード</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                        <input type="password" name="password" id="password" required
+                               class="input-field w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
+                               placeholder="••••••••">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-10">
+                <button type="submit" class="btn-shine w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200">
+                    ログイン <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+
+            <div class="mt-6 text-center">
+                <a href="/student_login" class="text-sm font-medium text-gray-500 hover:text-blue-600 transition duration-200 flex items-center justify-center gap-2">
+                    <i class="fas fa-user-graduate"></i> 学生ログインはこちら
+                </a>
+            </div>
+            <p class="mt-8 text-center text-xs text-gray-400">
+                &copy; 2025 Attendance System
+            </p>
+        </form>
+    </div>
+</body>
+</html>

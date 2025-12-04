@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>初回パスワード設定</title>
+    <style>
+        /* === ベースのスタイル (画面中央寄せ) === */
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f2f5; /* 背景色を少しグレーに */
+        }
+
+        /* === ウェーブボックスのスタイル === */
+        .wave-box {
+            width: 90%; /* スマホ対応 */
+            max-width: 400px;
+            /* 元のbodyのスタイルを引き継ぎ */
+            padding: 2em; /* 少し広めに */
+            border-radius: 12px; /* 角丸を少し強く */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* 影を追加して浮かせる */
+            background: #fbfdf5; /* 薄い黄色っぽい白 */
+            position: relative; /* 波の基準点 */
+            overflow: hidden; /* はみ出た波を隠す */
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+
+        /* === コンテンツを前面に出すためのラッパー === */
+        .content-wrapper {
+            position: relative;
+            z-index: 20; /* 波のオーバーレイ(z-index:11)より手前に表示 */
+        }
+
+        /* === 既存のフォームスタイル === */
+        .form-group { margin-bottom: 1em; }
+        label { display: block; margin-bottom: 0.5em; font-weight: bold; color: #555; }
+        /* inputのデザインを少しモダンに */
+        input[type="text"], input[type="password"] {
+            width: 100%; box-sizing: border-box; padding: 12px;
+            border: 1px solid #ddd; border-radius: 6px;
+            background: rgba(255,255,255,0.8); /* 少し透明にして背景を透かす */
+        }
+        input:focus { outline: none; border-color: #0af; }
+
+        .btn {
+            padding: 12px 15px; background: #0af; /* 波の色に合わせる */
+            color: white; border: none; border-radius: 6px;
+            cursor: pointer; width: 100%; font-weight: bold; font-size: 1em;
+            transition: background 0.3s;
+        }
+        .btn:hover { background: #009bdb; }
+
+        h1 { text-align: center; margin-top: 0; color: #333; }
+        .message { padding: 1em; margin-bottom: 1em; border-radius: 4px; text-align: center; }
+        .error { background: #f8d7da; color: #721c24; }
+        .success { background: #d4edda; color: #155724; }
+        .login-link { text-align: center; margin-top: 1.5em; font-size: 0.9em; }
+        .login-link a { color: #0af; text-decoration: none; }
+
+        /* === ウェーブ（波）のアニメーション定義 === */
+        .wave {
+            opacity: .4;
+            position: absolute;
+            top: 10%; /* 波の高さ */
+            left: 50%;
+            background: #0af; /* 波の色 */
+            width: 600px; /* ボックスより大きく */
+            height: 600px;
+            margin-left: -300px;
+            margin-top: -300px;
+            transform-origin: 50% 48%;
+            border-radius: 43%;
+            animation: drift 3000ms infinite linear;
+            z-index: 1;
+        }
+        .wave.-three {
+            animation: drift 5000ms infinite linear;
+            opacity: 0.1;
+            background: #f0f4c3; /* 薄い黄色 */
+        }
+        .wave.-two {
+            animation: drift 7000ms infinite linear;
+            opacity: .1;
+            background: #69b4f4; /* 薄い青 */
+            z-index: 2;
+        }
+        /* ボックス上のグラデーションオーバーレイ */
+        .wave-box:after {
+            content: '';
+            display: block;
+            left: 0; top: 0; width: 100%; height: 100%;
+            /* 上がピンク、下が透明、最後が白のグラデーション */
+            background: linear-gradient(to bottom, rgba(238, 136, 170, 0.8), rgba(221, 238, 255, 0) 60%, rgba(255, 255, 255, 0.8));
+            z-index: 11;
+            position: absolute;
+            pointer-events: none; /* クリックを通過させる */
+        }
+        @keyframes drift {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="wave-box">
+        <div class="wave -one"></div>
+        <div class="wave -two"></div>
+        <div class="wave -three"></div>
+
+        <div class="content-wrapper">
+            <h1>初回パスワード設定</h1>
+            <p style="text-align: center; color: #666;">
+                これが最初の1回だけ必要な作業です。
+            </p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('student_register') }}" method="POST">
+                <div class="form-group">
+                    <label for="student_id">学生ID (例: 222521301)</label>
+                    <input type="text" id="student_id" name="student_id" required placeholder="学生証の番号を入力">
+                </div>
+                <div class="form-group">
+                    <label for="password">設定したいパスワード</label>
+                    <input type="password" id="password" name="password" required placeholder="8文字以上を推奨">
+                </div>
+                <div class="form-group">
+                    <label for="password_confirm">パスワード (確認用)</label>
+                    <input type="password" id="password_confirm" name="password_confirm" required placeholder="もう一度入力">
+                </div>
+                <button type="submit" class="btn">パスワードを設定して登録</button>
+            </form>
+
+            <div class="login-link">
+                <a href="{{ url_for('student_login') }}">すでに登録済みの方（ログイン）はこちら</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

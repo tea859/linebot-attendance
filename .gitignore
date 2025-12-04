@@ -1,0 +1,18 @@
+# データベース
+zaiseki.db
+
+# 顔写真
+faces/
+
+# Pythonキャッシュ
+__pycache__/
+*.pyc
+
+# Anaconda / VSCode
+.vscode/
+.ipynb_checkpoints/
+
+# 機密情報 (もし .env ファイルを使っている場合)
+.env
+
+uploaded_images/

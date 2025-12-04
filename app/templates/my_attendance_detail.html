@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人別出席詳細</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .status-mark {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .status-o { color: #10b981; } /* 緑 (出席) */
+        .status-t { color: #f59e0b; } /* 黄 (遅刻) */
+        .status-x { color: #ef4444; } /* 赤 (欠席) */
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    
+    <div class="max-w-7xl mx-auto">
+        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-indigo-500 flex justify-between items-center">
+            
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">{{ student_name }} さんの出席詳細</h1>
+                <p class="text-gray-500 mt-1">第{{ selected_kiki }}期: {{ subject_filter }}</p>
+            </div>
+            
+            {% if is_portal_view %}
+                <a href="{{ url_for('my_portal') }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
+                    ← マイポータルに戻る
+                </a>
+            {% else %}
+                <a href="{{ url_for('my_attendance', student_id=student_id, kiki=selected_kiki) }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
+                    ← サマリー一覧に戻る
+                </a>
+            {% endif %}
+            
+        </header>
+    </div>
+    <main class="bg-white p-6 rounded-xl shadow-xl">
+        <div class="space-y-4">
+            {% for row in report_data %}
+            <div class="border border-gray-200 rounded-lg overflow-hidden">
+                <div class="detail-content p-4">
+                    {% if max_count == 0 %}
+                        <p class="text-center text-gray-500 py-8">この授業の出席記録はまだありません。</p>
+                    {% else %}
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                        {% for i in range(1, max_count + 1) %}
+                            {% set count_str = "count_" ~ i %}
+                            {% set record_id = row[count_str ~ "_id"] %}
+                            {% set status = row[count_str ~ "_status"] %}
+                            {% set display = row[count_str ~ "_display"] %}
+                            {% set original_status = row[count_str ~ "_original_status"] %}
+                            {% set is_phantom = row[count_str ~ "_is_phantom"] %}
+                            {% set jigen = row[count_str ~ "_jigen"] %}
+                            
+                            {% if status != '-' %}
+                            <div class="text-center p-3 border rounded-lg
+                                {% if '○' in status %}bg-green-50 border-green-200
+                                {% elif '△' in status %}bg-yellow-50 border-yellow-200
+                                {% elif '×' in status %}bg-red-50 border-red-200
+                                {% else %}bg-gray-50 border-gray-200{% endif %}
+                                
+                                {% if not is_phantom and not is_portal_view %}
+                                    cursor-pointer hover:shadow-lg transition"
+                                    onclick="openStatusModal('{{ record_id }}', '{{ original_status }}')
+                                {% else %}
+                                    "
+                                {% endif %}>
+                                
+                                <p class="text-xs text-gray-500 mb-1">#{{ i }}</p>
+                                <span class="status-mark 
+                                    {% if '○' in status %}status-o
+                                    {% elif '△' in status %}status-t
+                                    {% elif '×' in status %}status-x
+                                    {% else %}text-gray-600{% endif %}">
+                                    {{ status }}
+                                </span>
+                                
+                                <p class="text-xs text-gray-700 mt-1">
+                                    {{ display.split('(')[1].split(')')[0] }} ({{ jigen }}限)
+                                </p>
+                                
+                                {% if is_phantom %}
+                                <p class="text-xs text-gray-400" style="font-size: 0.7em; margin-top: 2px;">(未記録)</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <div id="statusModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6">
+            <h3 class="text-xl font-bold mb-4">ステータス変更</h3>
+            <p class="text-sm text-gray-600 mb-4">記録ID: <span id="modal_record_id_display" class="font-mono"></span></p>
+            
+            <input type="hidden" id="modal_record_id">
+            
+            <div class="mb-4">
+                <label for="new_status" class="block text-gray-700 font-medium mb-2">新しいステータス</label>
+                <select id="new_status" class="w-full p-2 border border-gray-300 rounded-lg">
+                    <option value="出席">出席</option>
+                    <option value="遅刻">遅刻</option>
+                    <option value="欠席">欠席</option>
+                    <option value="出席(補講)">出席(補講)</option>
+                    <option value="公欠">公欠</option>
+                </select>
+            </div>
+            
+            <div class="flex justify-end space-x-3 mt-6">
+                <button type="button" onclick="closeStatusModal()" class="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-400">キャンセル</button>
+                <button type="button" onclick="submitStatusUpdate()" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">更新</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        function toggleDetail(headerElement) {
+            // ... (既存のアコーディオン用JS)
+        }
+        
+        // ★★★ ここから追加: モーダル操作JS ★★★
+        const modal = document.getElementById('statusModal');
+        const recordIdInput = document.getElementById('modal_record_id');
+        const recordIdDisplay = document.getElementById('modal_record_id_display');
+        const statusSelect = document.getElementById('new_status');
+
+        function openStatusModal(recordId, currentStatus) {
+            recordIdInput.value = recordId;
+            recordIdDisplay.textContent = recordId;
+            statusSelect.value = currentStatus; // 現在のステータスを選択状態にする
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeStatusModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function submitStatusUpdate() {
+            const recordId = recordIdInput.value;
+            const newStatus = statusSelect.value;
+
+            try {
+                const response = await fetch('/api/update_status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        record_id: parseInt(recordId), // IDを数値として送信
+                        new_status: newStatus
+                    })
+                });
+
+                if (response.ok) {
+                    alert('ステータスを更新しました。');
+                    location.reload(); // ページをリロードして変更を反映
+                } else {
+                    const errorData = await response.json();
+                    alert('更新に失敗しました: ' + errorData.error);
+                }
+            } catch (err) {
+                alert('通信エラー: ' + err);
+            }
+        }
+    </script>
+</body>
+</html>
