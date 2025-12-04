@@ -102,6 +102,41 @@ def parse_message_with_ai(text):
     except Exception as e:
         print(f"Gemini Parse Error: {e}")
         return None
+
+def analyze_report_reason(text):
+    """
+    【従来型】遅刻・欠席理由をGeminiで解析し、「分類」と「短い要約」を返す
+    （フォーマット指定の連絡で使われます）
+    """
+    if not gemini_model:
+        return None
+
+    prompt = f"""
+    あなたは学校の事務システムAIです。
+    学生から届いた「遅刻・欠席の理由」を読み、以下の4つのカテゴリのいずれかに分類し、さらに理由を5文字以内で要約してください。
+    
+    【カテゴリ候補】
+    - 体調不良
+    - 交通機関
+    - 寝坊
+    - 私用/その他
+
+    【入力テキスト】
+    {text}
+
+    【出力フォーマット】
+    [カテゴリ] 要約
+    （例: [交通機関] 電車遅延、[体調不良] 38度の熱、[寝坊] 起床ミス）
+    余計な挨拶は不要です。フォーマット通りに出力してください。
+    """
+
+    try:
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print(f"Gemini Analysis Error: {e}")
+        return None
+
 def save_image(base64_data, student_id):
     try:
         # データURLスキームを取り除く
