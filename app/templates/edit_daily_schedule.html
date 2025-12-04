@@ -318,7 +318,7 @@
                 remark: remark
             };
 
-            const response = await fetch('{{ url_for("api_edit_daily_schedule") }}', {
+            const response = await fetch('{{ url_for("api.api_edit_daily_schedule") }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -356,7 +356,7 @@
                 daily_id: dailyId 
             };
             
-            const response = await fetch('{{ url_for("api_edit_daily_schedule") }}', {
+            const response = await fetch('{{ url_for("api.api_edit_daily_schedule") }}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
