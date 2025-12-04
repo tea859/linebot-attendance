@@ -11,7 +11,8 @@ from ..models import 学生, LineUser, ReportRecord
 from ..services import (
     get_schedule_for_line, get_attendance_summary_for_line, 
     process_temporary_exit, process_return_from_exit, process_exit_record,
-    get_student_id_from_line_user, sensor_data, analyze_student_habits, ask_ai_about_schedule
+    get_student_id_from_line_user, sensor_data, analyze_student_habits, ask_ai_about_schedule,
+    analyze_report_reason
 )
 
 line_bp = Blueprint('line', __name__)
