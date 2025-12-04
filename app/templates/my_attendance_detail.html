@@ -1,177 +1,84 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>個人別出席詳細</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .status-mark {
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        .status-o { color: #10b981; } /* 緑 (出席) */
-        .status-t { color: #f59e0b; } /* 黄 (遅刻) */
-        .status-x { color: #ef4444; } /* 赤 (欠席) */
-    </style>
-</head>
-<body class="bg-gray-100 p-8">
-    
-    <div class="max-w-7xl mx-auto">
-        <header class="bg-white p-6 rounded-xl shadow-lg mb-8 border-b-4 border-indigo-500 flex justify-between items-center">
-            
+{% extends "base.html" %}
+
+{% block title %}詳細レポート{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    {% if is_portal_view %}
+        <a href="{{ url_for('web.my_portal') }}#report" class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 w-fit">
+            <i class="fas fa-arrow-left"></i> <span class="font-bold">ポータルに戻る</span>
+        </a>
+    {% else %}
+        <a href="{{ url_for('web.my_attendance', student_id=student_id) }}" class="flex items-center gap-2 mb-6 cursor-pointer text-slate-500 hover:text-indigo-600 w-fit">
+            <i class="fas fa-arrow-left"></i> <span class="font-bold">一覧に戻る</span>
+        </a>
+    {% endif %}
+
+    <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-8 border-b pb-6 gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800">{{ student_name }} さんの出席詳細</h1>
-                <p class="text-gray-500 mt-1">第{{ selected_kiki }}期: {{ subject_filter }}</p>
-            </div>
-            
-            {% if is_portal_view %}
-                <a href="{{ url_for('my_portal') }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
-                    ← マイポータルに戻る
-                </a>
-            {% else %}
-                <a href="{{ url_for('my_attendance', student_id=student_id, kiki=selected_kiki) }}" class="text-blue-600 hover:text-blue-800 font-medium transition duration-150">
-                    ← サマリー一覧に戻る
-                </a>
-            {% endif %}
-            
-        </header>
-    </div>
-    <main class="bg-white p-6 rounded-xl shadow-xl">
-        <div class="space-y-4">
-            {% for row in report_data %}
-            <div class="border border-gray-200 rounded-lg overflow-hidden">
-                <div class="detail-content p-4">
-                    {% if max_count == 0 %}
-                        <p class="text-center text-gray-500 py-8">この授業の出席記録はまだありません。</p>
-                    {% else %}
-                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                        {% for i in range(1, max_count + 1) %}
-                            {% set count_str = "count_" ~ i %}
-                            {% set record_id = row[count_str ~ "_id"] %}
-                            {% set status = row[count_str ~ "_status"] %}
-                            {% set display = row[count_str ~ "_display"] %}
-                            {% set original_status = row[count_str ~ "_original_status"] %}
-                            {% set is_phantom = row[count_str ~ "_is_phantom"] %}
-                            {% set jigen = row[count_str ~ "_jigen"] %}
-                            
-                            {% if status != '-' %}
-                            <div class="text-center p-3 border rounded-lg
-                                {% if '○' in status %}bg-green-50 border-green-200
-                                {% elif '△' in status %}bg-yellow-50 border-yellow-200
-                                {% elif '×' in status %}bg-red-50 border-red-200
-                                {% else %}bg-gray-50 border-gray-200{% endif %}
-                                
-                                {% if not is_phantom and not is_portal_view %}
-                                    cursor-pointer hover:shadow-lg transition"
-                                    onclick="openStatusModal('{{ record_id }}', '{{ original_status }}')
-                                {% else %}
-                                    "
-                                {% endif %}>
-                                
-                                <p class="text-xs text-gray-500 mb-1">#{{ i }}</p>
-                                <span class="status-mark 
-                                    {% if '○' in status %}status-o
-                                    {% elif '△' in status %}status-t
-                                    {% elif '×' in status %}status-x
-                                    {% else %}text-gray-600{% endif %}">
-                                    {{ status }}
-                                </span>
-                                
-                                <p class="text-xs text-gray-700 mt-1">
-                                    {{ display.split('(')[1].split(')')[0] }} ({{ jigen }}限)
-                                </p>
-                                
-                                {% if is_phantom %}
-                                <p class="text-xs text-gray-400" style="font-size: 0.7em; margin-top: 2px;">(未記録)</p>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                    <span class="bg-indigo-50 text-indigo-600 p-2 rounded-lg text-xl"><i class="fas fa-book"></i></span>
+                    {{ subject_filter }}
+                </h2>
+                <div class="text-slate-500 mt-2 font-bold ml-1">
+                    <i class="fas fa-user-graduate mr-1"></i> {{ student_name }}
+                    <span class="mx-2 text-slate-300">|</span>
+                    第{{ selected_kiki }}期
                 </div>
             </div>
+            
+            <div class="flex gap-4 text-center">
+                <div class="bg-slate-50 p-3 rounded-lg">
+                    <div class="text-xs text-slate-400 font-bold mb-1">実施回数</div>
+                    <div class="font-bold text-xl text-slate-700">{{ max_count }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            {% for row in report_data %}
+                {% for i in range(1, max_count + 1) %}
+                    {% set status = row['count_' ~ i ~ '_status'] %}
+                    {% set display = row['count_' ~ i ~ '_display'] %}
+                    {% set original = row['count_' ~ i ~ '_original_status'] %}
+                    {% set is_phantom = row['count_' ~ i ~ '_is_phantom'] %}
+                    {% set jigen = row['count_' ~ i ~ '_jigen'] %}
+
+                    <div class="flex items-center justify-between p-4 rounded-xl border transition
+                        {{ 'bg-emerald-50 border-emerald-100' if status == '○' else ('bg-amber-50 border-amber-100' if status == '△' else 'bg-rose-50 border-rose-100') }}">
+                        
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm
+                                {{ 'bg-emerald-400' if status == '○' else ('bg-amber-400' if status == '△' else 'bg-rose-400') }}">
+                                {{ status }}
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-700">
+                                    {{ display.split('(')[1].replace(')', '') if '(' in display else '日付不明' }}
+                                    <span class="text-sm font-normal text-slate-500 ml-2">{{ jigen }}限</span>
+                                </div>
+                                <div class="text-xs font-bold opacity-70
+                                    {{ 'text-emerald-700' if status == '○' else ('text-amber-700' if status == '△' else 'text-rose-700') }}">
+                                    {{ original }}
+                                    {% if is_phantom %}(未記録){% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if is_phantom %}
+                            <div class="text-xs bg-rose-200 text-rose-700 px-2 py-1 rounded font-bold">欠席扱い</div>
+                        {% else %}
+                            <div class="text-xs bg-white/50 text-slate-500 px-2 py-1 rounded font-bold">記録済</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
             {% endfor %}
         </div>
-    </main>
 
-    <div id="statusModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6">
-            <h3 class="text-xl font-bold mb-4">ステータス変更</h3>
-            <p class="text-sm text-gray-600 mb-4">記録ID: <span id="modal_record_id_display" class="font-mono"></span></p>
-            
-            <input type="hidden" id="modal_record_id">
-            
-            <div class="mb-4">
-                <label for="new_status" class="block text-gray-700 font-medium mb-2">新しいステータス</label>
-                <select id="new_status" class="w-full p-2 border border-gray-300 rounded-lg">
-                    <option value="出席">出席</option>
-                    <option value="遅刻">遅刻</option>
-                    <option value="欠席">欠席</option>
-                    <option value="出席(補講)">出席(補講)</option>
-                    <option value="公欠">公欠</option>
-                </select>
-            </div>
-            
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" onclick="closeStatusModal()" class="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-400">キャンセル</button>
-                <button type="button" onclick="submitStatusUpdate()" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700">更新</button>
-            </div>
-        </div>
+        {% if max_count == 0 %}
+            <div class="text-center py-10 text-slate-400">まだ授業記録がありません。</div>
+        {% endif %}
     </div>
-    <script>
-        function toggleDetail(headerElement) {
-            // ... (既存のアコーディオン用JS)
-        }
-        
-        // ★★★ ここから追加: モーダル操作JS ★★★
-        const modal = document.getElementById('statusModal');
-        const recordIdInput = document.getElementById('modal_record_id');
-        const recordIdDisplay = document.getElementById('modal_record_id_display');
-        const statusSelect = document.getElementById('new_status');
-
-        function openStatusModal(recordId, currentStatus) {
-            recordIdInput.value = recordId;
-            recordIdDisplay.textContent = recordId;
-            statusSelect.value = currentStatus; // 現在のステータスを選択状態にする
-            
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function closeStatusModal() {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-
-        async function submitStatusUpdate() {
-            const recordId = recordIdInput.value;
-            const newStatus = statusSelect.value;
-
-            try {
-                const response = await fetch('/api/update_status', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        record_id: parseInt(recordId), // IDを数値として送信
-                        new_status: newStatus
-                    })
-                });
-
-                if (response.ok) {
-                    alert('ステータスを更新しました。');
-                    location.reload(); // ページをリロードして変更を反映
-                } else {
-                    const errorData = await response.json();
-                    alert('更新に失敗しました: ' + errorData.error);
-                }
-            } catch (err) {
-                alert('通信エラー: ' + err);
-            }
-        }
-    </script>
-</body>
-</html>
+</div>
+{% endblock %}
