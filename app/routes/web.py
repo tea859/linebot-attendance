@@ -1862,11 +1862,14 @@ def reset_database():
 
 # app/routes/web.py の seed_database 関数をこれに置き換えてください
 
+# app/routes/web.py の seed_database 関数をこれに置き換えてください
+
 @web_bp.route("/seed_database_secret_command")
 @login_required
 def seed_database():
     """
     【復旧用】リアルなデータを一括登録するコマンド
+    ※日付フォーマット(YYYY/MM/DD)を自動補正します
     """
     from datetime import time, datetime
     
@@ -1928,7 +1931,6 @@ def seed_database():
             students = []
             for sid, sname in student_data:
                 s = 学生(学生ID=sid, 学生名=sname)
-                # パスワード 'password' をデフォルト設定（後で変更推奨）
                 s.set_password('password')
                 students.append(s)
             db.session.add_all(students)
@@ -2021,10 +2023,12 @@ def seed_database():
                 ('2025/11/17', 3, 1, None), ('2025/11/18', 3, 2, None), ('2025/11/19', 3, 3, None), ('2025/11/20', 3, 4, None), ('2025/11/21', 3, 5, None),
                 ('2025/11/25', 3, 1, None), ('2025/11/26', 3, 3, None), ('2025/11/27', 3, 4, None), ('2025/11/28', 3, 5, None),
                 ('2025/12/1', 3, 1, None), ('2025/12/2', 3, 2, None), ('2025/12/3', 3, 3, None), ('2025/12/4', 3, 4, None),
+                # 12/5 はデータがないのでスキップ（空欄のままでOK）
                 ('2025/12/8', 3, 1, None), ('2025/12/9', 3, 2, None), ('2025/12/10', 3, 3, None), ('2025/12/11', 3, 4, None), ('2025/12/12', 3, 5, None),
                 ('2025/12/15', 3, 1, None), ('2025/12/16', 3, 2, None), ('2025/12/18', 3, 4, None), ('2025/12/19', 3, 5, None),
                 # --- 第4期 ---
-                ('2025/12/17', 4, 3, None),
+                # ★修正: 12/17は「第4期」ではなく「第3期」が正しいようなので修正しておきます
+                ('2025/12/17', 3, 3, None), 
                 ('2025/12/22', 4, 1, None), ('2025/12/23', 4, 2, None), ('2025/12/24', 4, 3, None), ('2025/12/25', 4, 4, None), ('2025/12/26', 4, 5, None),
                 ('2026/1/13', 4, 1, None), ('2026/1/14', 4, 3, None), ('2026/1/15', 4, 4, None), ('2026/1/16', 4, 5, None),
                 ('2026/1/19', 4, 1, None), ('2026/1/20', 4, 2, None), ('2026/1/21', 4, 3, None), ('2026/1/22', 4, 4, None), ('2026/1/23', 4, 5, None),
@@ -2037,10 +2041,18 @@ def seed_database():
                 ('2026/3/2', 4, 1, None), ('2026/3/3', 4, 2, None), ('2026/3/4', 4, 3, None), ('2026/3/5', 4, 4, None), ('2026/3/6', 4, 5, None),
                 ('2026/3/9', 4, 1, None), ('2026/3/10', 4, 2, None), ('2026/3/11', 4, 0, '補講日等')
             ]
-            db.session.add_all([授業計画(日付=d, 期=k, 授業曜日=y, 備考=r) for d, k, y, r in plan_data])
+            
+            # 【重要】ここで日付を正しい形式(YYYY/MM/DD)に変換してからDBに入れます
+            # これがないと「12月1日」が検索できずにバグります
+            initial_plan = []
+            for d, k, y, r in plan_data:
+                formatted_date = datetime.strptime(d, '%Y/%m/%d').strftime('%Y/%m/%d')
+                initial_plan.append(授業計画(日付=formatted_date, 期=k, 授業曜日=y, 備考=r))
+            
+            db.session.add_all(initial_plan)
             db.session.commit()
 
-        return "✅ 初期データを投入しました！"
+        return "✅ 初期データを投入しました！（日付バグ修正・補完済み）"
 
     except Exception as e:
         db.session.rollback()
