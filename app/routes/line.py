@@ -186,10 +186,21 @@ if handler:
                     reason = received_text.split(":", 1)[1].strip()
                     if not reason: raise IndexError
                     
+                    # ▼▼▼ ここでAI分析を実行！ ▼▼▼
+                    # analyze_report_reason は services.py からインポートしてください
+                    # from ..services import analyze_report_reason をファイルの先頭に追加
+                    ai_result = analyze_student_habits(student_id) # 既存のインポート確認
+                    
+                    # 正しくはこれ ↓
+                    from ..services import analyze_report_reason
+                    analysis_text = analyze_report_reason(reason)
+                    # ▲▲▲ 分析ここまで ▲▲▲
+
                     new_report = ReportRecord(
                         student_id=student_id,
                         report_type=report_type,
                         reason=reason,
+                        ai_analysis=analysis_text, # DBに保存
                         report_date=datetime.now(),
                         is_resolved=False
                     )
@@ -201,18 +212,25 @@ if handler:
                         student = 学生.query.get(student_id)
                         admin_email = os.environ.get('MAIL_USERNAME')
                         if admin_email and os.environ.get('GAS_API_URL'):
+                            # メール本文にもAI分析結果を載せる
+                            body_text = f"学生: {student.学生名}\n理由: {reason}\nAI分析: {analysis_text}\n日時: {datetime.now()}"
+                            
                             payload = {
                                 "to": admin_email,
                                 "subject": f"【{report_type}連絡】{student.学生名}",
-                                "body": f"学生: {student.学生名}\n理由: {reason}\n日時: {datetime.now()}",
+                                "body": body_text,
                                 "auth_token": os.environ.get('GAS_AUTH_TOKEN')
                             }
+                            # import requests が必要
+                            # import os が必要
+                            # from threading import Thread が必要
+                            # send_gas_background は services.py にあるのでインポートして使うか、ここで直接post
                             requests.post(os.environ.get('GAS_API_URL'), json=payload)
                     except Exception as e:
                         print(f"Email Error: {e}")
 
                     reply_message = TextSendMessage(
-                        text=f"📢 {student.学生名}さん、{report_type}連絡を受け付けました。\n理由: {reason}\n管理者に通知されました。"
+                        text=f"📢 {student.学生名}さん、{report_type}連絡を受け付けました。\n理由: {reason}\n確認: {analysis_text}"
                     )
                 except IndexError:
                     reply_message = TextSendMessage(text=f"❌ 理由が入力されていません。\n例: 「{report_type}連絡:風邪のため」")
