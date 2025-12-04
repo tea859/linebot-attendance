@@ -60,8 +60,9 @@
                 {% if current_user.is_authenticated %}
                     {% if 'student-' in current_user.get_id() %}
                         <li><a href="{{ url_for('web.my_portal') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-home w-6 text-indigo-500"></i> ポータルホーム</a></li>
-                        <li><a href="{{ url_for('web.my_attendance') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-chart-pie w-6 text-rose-500"></i> 出席レポート</a></li>
-                        <li><a href="{{ url_for('web.schedule') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="far fa-calendar-alt w-6 text-emerald-500"></i> 時間割</a></li>
+                        <li><a href="{{ url_for('web.my_portal') }}#report" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-chart-pie w-6 text-rose-500"></i> 出席レポート</a></li>
+                        <li><a href="{{ url_for('web.my_portal') }}#schedule" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="far fa-calendar-alt w-6 text-emerald-500"></i> 時間割</a></li>
+                        <li><a href="{{ url_for('web.my_portal') }}#setting" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="far fa-calendar-alt w-6 text-emerald-500"></i> 設定</a></li>
                     {% else %}
                         <li><a href="{{ url_for('web.index') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-tachometer-alt w-6 text-blue-500"></i> ダッシュボード</a></li>
                         <li><a href="{{ url_for('web.attendance') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-clipboard-check w-6 text-indigo-500"></i> 出席登録</a></li>
