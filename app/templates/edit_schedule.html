@@ -1,349 +1,104 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>時間割編集</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 24px 24px;
-            color: #334155;
-        }
+{% extends "base.html" %}
 
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e2e8f0;
-        }
+{% block title %}時間割編集 (マスター){% endblock %}
 
-        /* グリッドレイアウト */
-        .grid-container {
-            display: grid;
-            grid-template-columns: 60px repeat(5, minmax(0, 1fr));
-            border-radius: 12px;
-            overflow: hidden;
-            background-color: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .header-cell {
-            background-color: #f8fafc;
-            color: #64748b;
-            font-weight: 700;
-            padding: 12px;
-            text-align: center;
-            border-bottom: 2px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-        }
-
-        .time-label {
-            background-color: #f8fafc;
-            color: #94a3b8;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-right: 2px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .editable-slot {
-            height: 100px;
-            border-right: 1px solid #f1f5f9;
-            border-bottom: 1px solid #f1f5f9;
-            cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 8px;
-            text-align: center;
-        }
-        
-        .editable-slot:hover {
-            transform: scale(1.05);
-            z-index: 10;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
-            background-color: #fff !important;
-            border-color: transparent;
-        }
-        
-        /* ホバー時のアイコン表示 */
-        .editable-slot::after {
-            content: "\f303"; /* FontAwesome edit icon */
-            font-family: "Font Awesome 6 Free";
-            font-weight: 900;
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            color: rgba(99, 102, 241, 0.5);
-            font-size: 2rem;
-            transition: transform 0.2s;
-            pointer-events: none;
-        }
-        .editable-slot:hover::after {
-            transform: translate(-50%, -50%) scale(1);
-        }
-
-        /* セルの状態別カラー */
-        .slot-empty { background-color: #f8fafc; color: #cbd5e1; }
-        .slot-filled { background-color: #eff6ff; color: #1e40af; border-left: 3px solid #3b82f6; }
-        .slot-remark { background-color: #fffbeb; color: #92400e; border-left: 3px solid #f59e0b; }
-
-        /* モーダルアニメーション */
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .modal-content {
-            animation: modalFadeIn 0.2s ease-out forwards;
-        }
-
-        /* アニメーション */
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
-</head>
-<body class="pb-20 pt-16">
-
-    <nav class="bg-white border-b border-slate-200 fixed top-0 inset-x-0 z-50 h-16 flex items-center shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-between items-center">
-            <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
-                <div class="bg-blue-600 text-white p-2 rounded-md flex items-center justify-center w-10 h-10 shadow-sm">
-                    <i class="fas fa-building text-xl"></i>
-                </div>
-                <span class="font-bold text-xl text-slate-800">Attendance System</span>
-            </a>
-
-            <a href="/" class="text-slate-500 hover:text-blue-600 transition flex items-center gap-2 font-medium text-sm">
-                <i class="fas fa-home"></i> ダッシュボードへ
-            </a>
-        </div>
-    </nav>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-        
-        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
-            <div class="flex items-center gap-4">
-                <div class="bg-gradient-to-br from-rose-500 to-orange-500 text-white p-3 rounded-xl shadow-lg">
-                    <i class="fas fa-edit text-2xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-800">時間割編集</h1>
-                    <p class="text-slate-500 text-sm">クリックして科目を変更できます</p>
-                </div>
-            </div>
-            
-            <div class="flex flex-col md:flex-row gap-3 items-end md:items-center">
-                <form action="{{ url_for('web.save_as_default') }}" method="POST" onsubmit="return confirm('現在の時間割設定を「復元用データ」として保存しますか？\n（以前のバックアップは上書きされます）');">
-                    <button type="submit" class="bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 hover:text-indigo-600 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition flex items-center gap-2">
-                        <i class="fas fa-save text-indigo-500"></i> バックアップ保存
-                    </button>
-                </form>
-
-                <a href="/" class="group flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-rose-600 transition px-2">
-                    <span class="group-hover:-translate-x-1 transition-transform">←</span> メインメニュー
-                </a>
-            </div>
-        </header>
-
-        {% if success %}
-        <div class="animate-fade-in mb-6 p-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-3">
-            <i class="fas fa-check-circle text-xl"></i> {{ success }}
-        </div>
-        {% endif %}
-        {% if error %}
-        <div class="animate-fade-in mb-6 p-4 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 flex items-center gap-3">
-            <i class="fas fa-exclamation-triangle text-xl"></i> {{ error }}
-        </div>
-        {% endif %}
-
-        <div class="mb-2 flex items-center justify-between">
-            <label class="text-sm font-bold text-slate-600">編集する学期(期)を選択:</label>
-            <span class="text-xs text-slate-400">※ カレンダーの日付がこの「期」に属している場合に反映されます</span>
-        </div>
-        <nav class="flex space-x-2 mb-6 overflow-x-auto pb-2 animate-fade-in" style="animation-delay: 0.1s;">
-            {% for kiki_num in kikis %}
-            <a href="/edit_schedule?kiki={{ kiki_num }}" 
-               class="px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 flex-shrink-0
-               {% if kiki_num == selected_kiki|string %}
-                   bg-rose-600 text-white shadow-lg shadow-rose-200 transform scale-105
-               {% else %}
-                   bg-white text-slate-500 hover:bg-rose-50 hover:text-rose-600 shadow-sm
-               {% endif %}">
-                第{{ kiki_num }}期
-            </a>
-            {% endfor %}
-        </nav>
-
-        <div class="glass-card p-6 animate-fade-in" style="animation-delay: 0.2s;">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-slate-700 flex items-center gap-2">
-                    <span class="bg-rose-100 text-rose-600 w-8 h-8 rounded-full flex items-center justify-center text-sm">{{ selected_kiki }}</span>
-                    第{{ selected_kiki }}期 編集モード
-                </h2>
-                <span class="text-xs text-slate-400 font-medium">
-                    <i class="fas fa-mouse-pointer mr-1"></i> セルをクリックして編集
-                </span>
-            </div>
-            
-            <div class="overflow-x-auto pb-4">
-                <div class="grid grid-container min-w-[800px]">
-                    
-                    <div class="header-cell bg-slate-50"></div>
-                    {% for day in 曜日順 %}
-                    <div class="header-cell">{{ day }}</div>
-                    {% endfor %}
-                    
-                    {% for period in 時限一覧 %}
-                        <div class="time-label">
-                            {% if period == 5 %}<span class="text-xs">備考</span>{% else %}{{ period }}<span class="text-[10px] ml-0.5">限</span>{% endif %}
-                        </div>
-                        
-                        {% for day in 曜日順 %}
-                            {% set slot = schedule_grid[period][day] %}
-                            <div class="editable-slot
-                                {% if slot.is_empty %}slot-empty
-                                {% elif period == 5 %}slot-remark
-                                {% else %}slot-filled{% endif %}"
-                                 data-schedule-id="{{ slot.時間割ID }}"
-                                 data-day="{{ day }}"
-                                 data-period="{{ period }}"
-                                 data-subject-id="{{ slot.授業ID }}"
-                                 data-remark="{{ slot.備考 }}"
-                                 onclick="openEditModal(this)">
-                                
-                                {% if slot.is_empty %}
-                                    <span class="text-xs font-bold opacity-50">+ 追加</span>
-                                {% else %}
-                                    <span class="text-sm font-bold line-clamp-2 leading-tight">{{ slot.授業科目名 }}</span>
-                                    {% if period == 5 and slot.備考 %}
-                                        <span class="text-xs mt-1 bg-white/50 px-2 py-0.5 rounded text-amber-700 truncate max-w-full">{{ slot.備考 }}</span>
-                                    {% endif %}
-                                {% endif %}
-                            </div>
-                        {% endfor %}
-                    {% endfor %}
-                </div>
-            </div>
-            
-            <div class="mt-8 pt-4 border-t border-slate-100 flex justify-end">
-                <form action="{{ url_for('web.restore_schedule') }}" method="POST" onsubmit="return confirm('警告: 本当に初期状態（バックアップ）に戻しますか？\n現在の編集内容は失われます。');">
-                    <button type="submit" class="text-xs font-bold text-slate-400 hover:text-rose-500 transition flex items-center gap-1">
-                        <i class="fas fa-undo"></i> デフォルト設定に復元する
-                    </button>
-                </form>
-            </div>
-        </div>
-
-        <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center z-50 transition-opacity duration-300">
-            <div class="modal-content bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 relative mx-4">
-                <button onclick="closeEditModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition">
-                    <i class="fas fa-times text-xl"></i>
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-slate-700 flex items-center gap-2">
+            <i class="fas fa-edit text-slate-500"></i> 時間割編集 (マスター)
+        </h2>
+        <div class="flex gap-2">
+            <form action="{{ url_for('web.restore_schedule') }}" method="POST" onsubmit="return confirm('本当にデフォルトに戻しますか？');">
+                <button type="submit" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded font-bold transition">
+                    <i class="fas fa-undo mr-1"></i> 初期化
                 </button>
-
-                <h3 class="text-2xl font-bold text-slate-800 mb-1 flex items-center gap-2">
-                    <i class="fas fa-edit text-rose-500"></i> 時間割編集
-                </h3>
-                <p class="text-sm text-slate-500 mb-6 font-mono" id="modalTitle"></p>
-
-                <form id="editForm" method="POST" action="/edit_schedule">
-                    <input type="hidden" name="schedule_id" id="modal_schedule_id">
-                    <input type="hidden" name="kiki" value="{{ selected_kiki }}">
-                    <input type="hidden" name="day" id="modal_day">
-                    <input type="hidden" name="period" id="modal_period">
-                    
-                    <div id="subjectSection" class="mb-6">
-                        <label for="new_subject_id" class="block text-xs font-bold text-slate-500 uppercase mb-2">授業科目を選択</label>
-                        <div class="relative">
-                            <select id="new_subject_id" name="new_subject_id" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition appearance-none">
-                                {% for id, name in subjects %}
-                                <option value="{{ id }}">{{ name }}</option>
-                                {% endfor %}
-                            </select>
-                            <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-500">
-                                <i class="fas fa-chevron-down text-xs"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="remarkSection" class="mb-6 hidden">
-                        <label for="remark_text" class="block text-xs font-bold text-slate-500 uppercase mb-2">備考 / 連絡事項</label>
-                        <input type="text" id="remark_text" name="remark_text" 
-                               class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" 
-                               placeholder="例: 補講、ミーティング">
-                        <p class="text-xs text-slate-400 mt-2">※ 空欄にすると削除されます。</p>
-                    </div>
-                    
-                    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                        <button type="button" onclick="closeEditModal()" class="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-500 hover:bg-slate-100 transition">
-                            キャンセル
-                        </button>
-                        <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white rounded-lg text-sm font-bold shadow-md transition transform hover:-translate-y-0.5">
-                            <i class="fas fa-save mr-2"></i> 保存する
-                        </button>
-                    </div>
-                </form>
-            </div>
+            </form>
+            <form action="{{ url_for('web.save_as_default') }}" method="POST" onsubmit="return confirm('現在の状態をバックアップとして保存しますか？');">
+                <button type="submit" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded font-bold transition">
+                    <i class="fas fa-save mr-1"></i> バックアップ
+                </button>
+            </form>
         </div>
-
     </div>
 
-    <script>
-        const modal = document.getElementById('editModal');
-        const modalTitle = document.getElementById('modalTitle');
-        const subjectSection = document.getElementById('subjectSection');
-        const remarkSection = document.getElementById('remarkSection');
-        const selectSubject = document.getElementById('new_subject_id');
-        const inputRemark = document.getElementById('remark_text');
-        
-        function openEditModal(slotElement) {
-            const day = slotElement.dataset.day;
-            const period = slotElement.dataset.period;
-            const scheduleId = slotElement.dataset.scheduleId;
-            const subjectId = slotElement.dataset.subjectId;
-            const remark = slotElement.dataset.remark;
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
+        <form method="POST" action="{{ url_for('web.edit_schedule') }}" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">学期</label>
+                <select name="kiki" class="w-full p-2 bg-slate-50 border border-slate-200 rounded font-bold">
+                    {% for k in kikis %}
+                    <option value="{{ k }}" {{ 'selected' if k == selected_kiki }}>第{{ k }}期</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">曜日</label>
+                <select name="day" class="w-full p-2 bg-slate-50 border border-slate-200 rounded font-bold">
+                    {% for y in 曜日順 %}
+                    <option value="{{ y }}">{{ y }}曜日</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1">時限</label>
+                <select name="period" class="w-full p-2 bg-slate-50 border border-slate-200 rounded font-bold">
+                    {% for p in 時限一覧 %}
+                    <option value="{{ p }}">{{ p }}限</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-xs font-bold text-slate-400 mb-1">授業 / 備考</label>
+                <div class="flex gap-2">
+                    <select name="new_subject_id" class="flex-1 p-2 bg-slate-50 border border-slate-200 rounded">
+                        {% for sid, sname in subjects %}
+                        <option value="{{ sid }}">{{ sname }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="remark_text" placeholder="備考 (5限のみ)" class="w-1/3 p-2 bg-slate-50 border border-slate-200 rounded">
+                </div>
+            </div>
+            <div class="md:col-span-5 text-right">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-8 rounded-lg shadow transition">
+                    更新する
+                </button>
+            </div>
+        </form>
+    </div>
 
-            document.getElementById('modal_schedule_id').value = scheduleId;
-            document.getElementById('modal_day').value = day;
-            document.getElementById('modal_period').value = period;
-            
-            modalTitle.textContent = `第{{ selected_kiki }}期 • ${day}曜日 • ${period}限`;
-
-            if (period === '5') {
-                subjectSection.classList.add('hidden');
-                remarkSection.classList.remove('hidden');
-                inputRemark.value = (remark && remark !== 'None') ? remark : '';
-            } else {
-                subjectSection.classList.remove('hidden');
-                remarkSection.classList.add('hidden');
-                selectSubject.value = subjectId || '0';
-            }
-
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function closeEditModal() {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-        
-        // モーダル外クリックで閉じる
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) closeEditModal();
-        });
-    </script>
-</body>
-</html>
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-4 bg-slate-50 border-b font-bold text-slate-600">
+            第{{ selected_kiki }}期 マスター時間割
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse min-w-[600px]">
+                <thead>
+                    <tr>
+                        <th class="p-3 bg-slate-50 border-b border-r w-16"></th>
+                        {% for y in 曜日順 %}<th class="p-3 bg-slate-50 border-b border-r font-bold text-slate-600">{{ y }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in 時限一覧 %}
+                    <tr>
+                        <td class="p-3 bg-slate-50 border-b border-r font-bold text-slate-500 text-center">{{ p }}限</td>
+                        {% for y in 曜日順 %}
+                            {% set cell = schedule_grid[p][y] %}
+                            <td class="p-3 border-b border-r h-20 align-middle text-center hover:bg-slate-50 transition">
+                                {% if not cell.is_empty %}
+                                    <div class="font-bold text-slate-700">{{ cell.授業科目名 }}</div>
+                                    {% if cell.備考 %}<div class="text-xs text-amber-600 bg-amber-50 inline-block px-1 rounded mt-1">{{ cell.備考 }}</div>{% endif %}
+                                {% else %}
+                                    <span class="text-slate-200">-</span>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
