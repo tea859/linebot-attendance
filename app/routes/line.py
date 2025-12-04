@@ -1,5 +1,7 @@
 import os
-from flask import Blueprint, request, abort, current_app # ★current_appを追加
+from datetime import datetime, timedelta
+import requests
+from flask import Blueprint, request, abort, current_app
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -11,8 +13,8 @@ from ..models import 学生, LineUser, ReportRecord
 from ..services import (
     get_schedule_for_line, get_attendance_summary_for_line, 
     process_temporary_exit, process_return_from_exit, process_exit_record,
-    get_student_id_from_line_user, sensor_data, analyze_student_habits, ask_ai_about_schedule,
-    analyze_report_reason
+    get_student_id_from_line_user, sensor_data, analyze_student_habits, 
+    ask_ai_about_schedule, analyze_report_reason, parse_message_with_ai
 )
 
 line_bp = Blueprint('line', __name__)
@@ -34,7 +36,6 @@ def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
     
-    # ★修正: app.logger ではなく current_app.logger を使う
     current_app.logger.info("Request body: " + body)
     
     try:
@@ -84,8 +85,6 @@ if handler:
         # ==========================================
         # 2. リッチメニューからの親メニュー呼び出し
         # ==========================================
-
-        # 【A. 時間割メニュー】
         elif received_text == "時間割メニュー":
             buttons = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="今日の時間割", text="今日の時間割")),
@@ -93,16 +92,13 @@ if handler:
             ])
             reply_message = TextSendMessage(text="いつの時間割を表示しますか？", quick_reply=buttons)
 
-        # 【B. 出席・連絡メニュー】
         elif received_text == "出席・連絡メニュー":
             buttons = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="出席サマリー", text="出席サマリー")),
-                QuickReplyButton(action=MessageAction(label="遅刻連絡する", text="遅刻フォーム起動")),
-                QuickReplyButton(action=MessageAction(label="欠席連絡する", text="欠席フォーム起動")),
+                QuickReplyButton(action=MessageAction(label="連絡方法ヘルプ", text="連絡方法ヘルプ")),
             ])
             reply_message = TextSendMessage(text="機能を選択してください。", quick_reply=buttons)
 
-        # 【C. 退出メニュー】
         elif received_text == "退出メニュー":
             buttons = QuickReply(items=[
                 QuickReplyButton(action=MessageAction(label="一時退出", text="一時退出")),
@@ -112,19 +108,13 @@ if handler:
             reply_message = TextSendMessage(text="退出操作を選んでください。", quick_reply=buttons)
 
         # ==========================================
-        # 3. 入力補助（魔法のリンク）
+        # 3. 入力補助（ヘルプ）
         # ==========================================
+        elif received_text == "連絡方法ヘルプ":
+            reply_message = TextSendMessage(text="💡 遅刻や欠席の連絡は、そのままメッセージを送るだけでOKです！\n\n例：\n「電車が遅れてます」\n「熱があるので休みます」\n「寝坊しました」")
         
-        elif received_text == "遅刻フォーム起動":
-            # ★BotのIDを確認してください (例: @742gxeis)
-            bot_id = "@742gxeis" 
-            url = f"https://line.me/R/oaMessage/{bot_id}/?遅刻連絡:"
-            reply_message = TextSendMessage(text=f"▼ 以下のリンクをタップして理由を入力してください。\n{url}")
-
-        elif received_text == "欠席フォーム起動":
-            bot_id = "@742gxeis"
-            url = f"https://line.me/R/oaMessage/{bot_id}/?欠席連絡:"
-            reply_message = TextSendMessage(text=f"▼ 以下のリンクをタップして理由を入力してください。\n{url}")
+        elif received_text == "遅刻フォーム起動" or received_text == "欠席フォーム起動":
+             reply_message = TextSendMessage(text="💡 現在はフォームを使わずに、直接メッセージを送るだけで自動受付できます！\n例：「寝坊しました」")
 
         # ==========================================
         # 4. 各機能の実行
@@ -135,7 +125,6 @@ if handler:
             days_ahead = 0 if received_text == "今日の時間割" else 1
             target_date = datetime.now() + timedelta(days=days_ahead)
             
-            # 土日チェック (5=土, 6=日)
             if target_date.weekday() >= 5:
                 reply_message = TextSendMessage(text=f"📅 {target_date.strftime('%Y/%m/%d')} は休校日です。")
             else:
@@ -175,7 +164,7 @@ if handler:
                 reply_message = TextSendMessage(text="センサーデータがまだありません。")
 
         # ==========================================
-        # 5. 欠席・遅刻連絡の保存処理 (管理者メール通知付き)
+        # 5. 【従来型】指定フォーマットでの連絡処理 (互換性維持)
         # ==========================================
         elif received_text.startswith("欠席連絡") or received_text.startswith("遅刻連絡:"):
             student_id = get_student_id_from_line_user(user_id)
@@ -187,45 +176,32 @@ if handler:
                     reason = received_text.split(":", 1)[1].strip()
                     if not reason: raise IndexError
                     
-                    # ▼▼▼ ここでAI分析を実行！ ▼▼▼
-                    # analyze_report_reason は services.py からインポートしてください
-                    # from ..services import analyze_report_reason をファイルの先頭に追加
-                    ai_result = analyze_student_habits(student_id) # 既存のインポート確認
-                    
-                    # 正しくはこれ ↓
-                    from ..services import analyze_report_reason
+                    # AI要約 (servicesからインポート済み)
                     analysis_text = analyze_report_reason(reason)
-                    # ▲▲▲ 分析ここまで ▲▲▲
 
                     new_report = ReportRecord(
                         student_id=student_id,
                         report_type=report_type,
                         reason=reason,
-                        ai_analysis=analysis_text, # DBに保存
+                        ai_analysis=analysis_text,
                         report_date=datetime.now(),
                         is_resolved=False
                     )
                     db.session.add(new_report)
                     db.session.commit()
                     
-                    # メール通知 (GAS経由)
+                    # メール通知
                     try:
                         student = 学生.query.get(student_id)
                         admin_email = os.environ.get('MAIL_USERNAME')
                         if admin_email and os.environ.get('GAS_API_URL'):
-                            # メール本文にもAI分析結果を載せる
-                            body_text = f"学生: {student.学生名}\n理由: {reason}\nAI分析: {analysis_text}\n日時: {datetime.now()}"
-                            
+                            body_text = f"学生: {student.学生名}\n理由: {reason}\nAI要約: {analysis_text}\n日時: {datetime.now()}"
                             payload = {
                                 "to": admin_email,
                                 "subject": f"【{report_type}連絡】{student.学生名}",
                                 "body": body_text,
                                 "auth_token": os.environ.get('GAS_AUTH_TOKEN')
                             }
-                            # import requests が必要
-                            # import os が必要
-                            # from threading import Thread が必要
-                            # send_gas_background は services.py にあるのでインポートして使うか、ここで直接post
                             requests.post(os.environ.get('GAS_API_URL'), json=payload)
                     except Exception as e:
                         print(f"Email Error: {e}")
@@ -244,12 +220,8 @@ if handler:
             if not student_id:
                 reply_message = TextSendMessage(text="⚠️ 学生IDが紐付いていません。「登録:ID」を行ってください。")
             else:
-                # analyze_student_habits関数が存在することを確認してください
-                if 'analyze_student_habits' in globals():
-                    analysis_result = analyze_student_habits(student_id)
-                    reply_message = TextSendMessage(text=f"🤖 {analysis_result}")
-                else:
-                    reply_message = TextSendMessage(text="⚠️ 分析機能の関数が見つかりません。")
+                analysis_result = analyze_student_habits(student_id)
+                reply_message = TextSendMessage(text=f"🤖 {analysis_result}")
 
         elif received_text.startswith("教えて") or received_text.startswith("AI"):
             student_id = get_student_id_from_line_user(user_id)
@@ -266,68 +238,58 @@ if handler:
                 reply_message = TextSendMessage(text=ai_answer)
 
         # ==========================================
-        # 7. 該当なしの場合（ヘルプを表示）
+        # 7. 該当なしの場合（AI自動判定）
         # ==========================================
         else:
-        student_id = get_student_id_from_line_user(user_id)
-        
-        # 学生登録していない場合
-        if student_id is None:
-            reply_message = TextSendMessage(text="⚠️ まずは学生IDを登録してください。\n例:「登録:222521301」")
-        else:
-            # ★★★ AIによる自然言語解析 ★★★
-            ai_result = parse_message_with_ai(received_text)
+            student_id = get_student_id_from_line_user(user_id)
             
-            if ai_result and ai_result.get("is_report"):
-                # --- A. 届出（遅刻・欠席）と判定された場合 ---
-                report_type = ai_result["report_type"]     # "遅刻" or "欠席"
-                category = ai_result["category"]           # "交通機関" etc
-                summary = ai_result["reason_summary"]      # "電車遅延"
-                ai_reply = ai_result["reply_text"]         # "承知いたしました..."
-
-                # DBに保存
-                new_report = ReportRecord(
-                    student_id=student_id,
-                    report_type=report_type,
-                    reason=received_text,   # 原文を保存
-                    ai_analysis=f"[{category}] {summary}", # AI分析結果
-                    report_date=datetime.now(),
-                    is_resolved=False
-                )
-                db.session.add(new_report)
-                db.session.commit()
-
-                # 管理者へメール通知 (GAS経由)
-                try:
-                    student = 学生.query.get(student_id)
-                    admin_email = os.environ.get('MAIL_USERNAME')
-                    if admin_email and os.environ.get('GAS_API_URL'):
-                        body_text = f"学生: {student.学生名}\n区分: {report_type}\n原文: {received_text}\nAI分析: [{category}] {summary}\n日時: {datetime.now()}"
-                        payload = {
-                            "to": admin_email,
-                            "subject": f"【{report_type}】{student.学生名} ({category})",
-                            "body": body_text,
-                            "auth_token": os.environ.get('GAS_AUTH_TOKEN')
-                        }
-                        # requests.post(...) # threadingで送るのがベスト
-                except Exception as e:
-                    print(f"Mail Error: {e}")
-
-                reply_message = TextSendMessage(text=f"✅ {report_type}連絡を受け付けました。\n\n🤖 {ai_reply}")
-
+            if student_id is None:
+                reply_message = TextSendMessage(text="⚠️ 学生IDが登録されていません。\nまず「登録:学生ID」を送ってください。")
             else:
-                # --- B. 届出ではない（雑談や質問）と判定された場合 ---
-                # 必要ならここで「時間割AI」に繋ぐこともできます
-                student = 学生.query.get(student_id)
-                student_name = student.学生名 if student else "学生"
+                # ★★★ AIによる自然言語解析 ★★★
+                ai_result = parse_message_with_ai(received_text)
                 
-                # スケジュールについて聞いてるかもしれないので、既存のAI回答機能に流す
-                ai_answer = ask_ai_about_schedule(received_text, student_name)
-                reply_message = TextSendMessage(text=ai_answer)
+                if ai_result and ai_result.get("is_report"):
+                    # --- A. 届出（遅刻・欠席）と判定された場合 ---
+                    report_type = ai_result["report_type"]
+                    category = ai_result["category"]
+                    summary = ai_result["reason_summary"]
+                    ai_reply = ai_result["reply_text"]
 
-    # 返信実行
-    if reply_message:
-        line_bot_api.reply_message(event.reply_token, reply_message)
+                    new_report = ReportRecord(
+                        student_id=student_id,
+                        report_type=report_type,
+                        reason=received_text,   # 原文
+                        ai_analysis=f"[{category}] {summary}", # AI分析結果
+                        report_date=datetime.now(),
+                        is_resolved=False
+                    )
+                    db.session.add(new_report)
+                    db.session.commit()
+
+                    try:
+                        student = 学生.query.get(student_id)
+                        admin_email = os.environ.get('MAIL_USERNAME')
+                        if admin_email and os.environ.get('GAS_API_URL'):
+                            body_text = f"学生: {student.学生名}\n区分: {report_type}\n原文: {received_text}\nAI分析: [{category}] {summary}\n日時: {datetime.now()}"
+                            payload = {
+                                "to": admin_email,
+                                "subject": f"【{report_type}】{student.学生名} ({category})",
+                                "body": body_text,
+                                "auth_token": os.environ.get('GAS_AUTH_TOKEN')
+                            }
+                            requests.post(os.environ.get('GAS_API_URL'), json=payload)
+                    except Exception as e:
+                        print(f"Mail Error: {e}")
+
+                    reply_message = TextSendMessage(text=f"✅ {report_type}連絡を受け付けました。\n\n🤖 {ai_reply}")
+
+                else:
+                    # --- B. 届出ではない場合 (スケジュール質問AIへ) ---
+                    student = 学生.query.get(student_id)
+                    student_name = student.学生名 if student else "学生"
+                    ai_answer = ask_ai_about_schedule(received_text, student_name)
+                    reply_message = TextSendMessage(text=ai_answer)
 
         # ==========================================
         # 8. 返信実行
