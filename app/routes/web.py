@@ -19,7 +19,7 @@ web_bp = Blueprint('web', __name__)
 def login():
     """ログインページと認証処理"""
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
 
     if request.method == "POST":
         username = request.form.get("username")
@@ -34,10 +34,10 @@ def login():
         if user_to_login and user_to_login.password == password:
             login_user(user_to_login) # ログイン状態をセッションに保存
             flash("✅ ログインしました。", "success")
-            return redirect(url_for('index'))
+            return redirect(url_for('web.index'))
         else:
             flash("❌ ユーザー名またはパスワードが間違っています。", "error")
-            return redirect(url_for('login'))
+            return redirect(url_for('web.login'))
     
     # GETリクエストの場合はログインページを表示
     return render_template("login.html")
@@ -52,7 +52,7 @@ def logout():
     """ログアウト処理"""
     logout_user() # セッションからユーザー情報を削除
     flash("✅ ログアウトしました。", "info")
-    return redirect(url_for('index'))
+    return redirect(url_for('web.index'))
 
 # --- 7. メインページ (ダッシュボード) ---
 @web_bp.route("/")
@@ -60,7 +60,7 @@ def logout():
 def index():
     if current_user.get_id().startswith('student-'):
         flash("管理者権限がありません。", "error")
-        return redirect(url_for('my_portal'))
+        return redirect(url_for('web.my_portal'))
     students = 学生.query.order_by(学生.学生ID).all()
     
     message = None
@@ -421,7 +421,7 @@ def restore_schedule():
             
             if count == 0:
                 flash("❌ 復元用のバックアップデータがありません。処理を中止しました。（現在のデータは守られました）", "error")
-                return redirect(url_for('edit_schedule')) # または index
+                return redirect(url_for('web.edit_schedule')) # または index
 
             # 2. バックアップがある場合のみ実行
             conn.execute(text("DELETE FROM \"時間割\""))
@@ -432,7 +432,7 @@ def restore_schedule():
     except Exception as e:
         flash(f"❌ 時間割の復元中にエラーが発生しました: {e}", "error")
         
-    return redirect(url_for('index'))
+    return redirect(url_for('web.index'))
 
 @web_bp.route("/manage_students", methods=["GET", "POST"])
 @login_required
@@ -553,7 +553,7 @@ def my_attendance():
     
     if not student_id or not student_id.isdigit():
         flash("学生IDが指定されていません。", "error")
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
     student_id = int(student_id)
     
     student_info = 学生.query.get(student_id)
@@ -673,7 +673,7 @@ def my_attendance_detail():
     
     if not subject_name_filter:
         flash("詳細を表示する授業が指定されていません。", "error")
-        return redirect(url_for('my_attendance', student_id=student_id, kiki=selected_kiki))
+        return redirect(url_for('web.my_attendance', student_id=student_id, kiki=selected_kiki))
 
     kiki_int = int(selected_kiki)
 
@@ -681,7 +681,7 @@ def my_attendance_detail():
     subject_obj = 授業.query.filter_by(授業科目名=subject_name_filter).first()
     if not subject_obj:
         flash(f"授業「{subject_name_filter}」が見つかりません。", "error")
-        return redirect(url_for('my_attendance', student_id=student_id, kiki=selected_kiki))
+        return redirect(url_for('web.my_attendance', student_id=student_id, kiki=selected_kiki))
     subject_id = subject_obj.授業ID
 
     # 2. (リスト1) DBに「実在する」出席記録を取得 (「時限」も取得)
@@ -938,7 +938,7 @@ def export_report_summary():
     """(エクスポート) 授業別レポートをCSVでダウンロード (text()版)"""
     selected_subject_key = request.args.get("subject_key")
     if not selected_subject_key:
-        return redirect(url_for('report_summary'))
+        return redirect(url_for('web.report_summary'))
 
     try:
         parts = selected_subject_key.split('-')
@@ -1048,7 +1048,7 @@ def export_report_summary():
     except Exception as e:
         db.session.rollback()
         print(f"Error exporting CSV: {e}")
-        return redirect(url_for('report_summary'))
+        return redirect(url_for('web.report_summary'))
 
 @web_bp.route("/send_schedule_email")
 @login_required
@@ -1072,7 +1072,7 @@ def send_schedule_email_route():
     except Exception as e:
         flash(f"❌ 送信エラー: {e}", "error")
         
-    return redirect(url_for('index'))
+    return redirect(url_for('web.index'))
 
 @web_bp.route("/alerts")
 @login_required
@@ -1097,7 +1097,7 @@ def resolve_alert(record_id):
         report.is_resolved = True
         db.session.commit()
         flash("✅ 連絡を確認済みにしました。", "success")
-    return redirect(url_for('alerts'))
+    return redirect(url_for('web.alerts'))
 
 # --- 11. LINE Bot Webhook (SQLAlchemy版) ---
 
@@ -1116,7 +1116,7 @@ def save_as_default():
     except Exception as e:
         flash(f"❌ 保存中にエラーが発生しました: {e}", "error")
         
-    return redirect(url_for('edit_schedule'))
+    return redirect(url_for('web.edit_schedule'))
 
 # ----------------------------------------------------------------------
 # 11. 学生専用ポータル (Student Portal)
@@ -1125,7 +1125,7 @@ def save_as_default():
 def student_register():
     """学生専用の初回パスワード設定ページ"""
     if current_user.is_authenticated:
-        return redirect(url_for('my_portal')) # ログイン済ならポータルへ
+        return redirect(url_for('web.my_portal')) # ログイン済ならポータルへ
 
     if request.method == "POST":
         try:
@@ -1135,29 +1135,29 @@ def student_register():
 
             if not student_id or not password or not password_confirm:
                 flash("❌ すべての項目を入力してください。", "error")
-                return redirect(url_for('student_register'))
+                return redirect(url_for('web.student_register'))
             
             if password != password_confirm:
                 flash("❌ パスワードが一致しません。", "error")
-                return redirect(url_for('student_register'))
+                return redirect(url_for('web.student_register'))
 
             student = 学生.query.get(student_id)
             
             if not student:
                 flash("❌ その学生IDは存在しません。管理者に確認してください。", "error")
-                return redirect(url_for('student_register'))
+                return redirect(url_for('web.student_register'))
             
             # 🚨 ここが重要: すでにパスワードが設定済みかチェック
             if student.password_hash is not None:
                 flash("⚠️ この学生IDは既にパスワード設定済みです。ログイン画面からログインしてください。", "warning")
-                return redirect(url_for('student_login'))
+                return redirect(url_for('web.student_login'))
             
             # パスワードをハッシュ化して設定
             student.set_password(password)
             db.session.commit()
             
             flash("✅ パスワードを設定しました！ ログインしてください。", "success")
-            return redirect(url_for('student_login'))
+            return redirect(url_for('web.student_login'))
 
         except ValueError:
             flash("学生IDは数字で入力してください。", "error")
@@ -1173,9 +1173,9 @@ def student_login():
     if current_user.is_authenticated:
         # すでにログイン済みの場合
         if current_user.get_id().startswith('student-'):
-            return redirect(url_for('my_portal'))
+            return redirect(url_for('web.my_portal'))
         else:
-            return redirect(url_for('index')) # 管理者は管理画面へ
+            return redirect(url_for('web.index')) # 管理者は管理画面へ
 
     if request.method == "POST":
         try:
@@ -1187,7 +1187,7 @@ def student_login():
             # データベースにパスワードが設定されているか、ハッシュで一致するかを確認
             if student and student.check_password(password):
                 login_user(student) # ⬅️ 学生としてログイン
-                return redirect(url_for('my_portal'))
+                return redirect(url_for('web.my_portal'))
             else:
                 flash("学生IDまたはパスワードが間違っています。", "error")
                 
@@ -1208,7 +1208,7 @@ def my_portal():
     
     if not current_user.get_id().startswith('student-'):
         flash("管理者はこのページにアクセスできません。", "error")
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
     
     student_id = current_user.学生ID
     student_name = current_user.学生名
@@ -1401,7 +1401,7 @@ def update_parent_email():
     
     # 学生以外は弾く
     if not current_user.get_id().startswith('student-'):
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
     
     parent_email = request.form.get("parent_email")
     
@@ -1416,7 +1416,7 @@ def update_parent_email():
         db.session.rollback()
         flash(f"❌ 保存に失敗しました: {e}", "error")
         
-    return redirect(url_for('my_portal'))
+    return redirect(url_for('web.my_portal'))
 
 @web_bp.route("/my_portal_detail")
 @login_required #
@@ -1425,7 +1425,7 @@ def my_portal_detail():
 
     if not current_user.get_id().startswith('student-'):
         flash("管理者はこのページにアクセスできません。", "error")
-        return redirect(url_for('index'))
+        return redirect(url_for('web.index'))
     
     # --- ▼▼▼ 修正点1: IDを自分自身に固定 ▼▼▼ ---
     student_id = current_user.学生ID
@@ -1436,7 +1436,7 @@ def my_portal_detail():
 
     if not subject_name_filter:
         flash("詳細を表示する授業が指定されていません。", "error")
-        return redirect(url_for('my_portal'))
+        return redirect(url_for('web.my_portal'))
 
     kiki_int = int(selected_kiki)
 
@@ -1446,7 +1446,7 @@ def my_portal_detail():
     subject_obj = 授業.query.filter_by(授業科目名=subject_name_filter).first()
     if not subject_obj:
         flash(f"授業「{subject_name_filter}」が見つかりません。", "error")
-        return redirect(url_for('my_portal'))
+        return redirect(url_for('web.my_portal'))
     subject_id = subject_obj.授業ID
 
     # 2. (リスト1) DBに「実在する」出席記録を取得 (「時限」も取得)
@@ -1707,7 +1707,7 @@ def edit_daily_schedule():
             base_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             flash("無効な日付形式です。")
-            return redirect(url_for('schedule_monthly')) # 戻り先を月間カレンダーに変更
+            return redirect(url_for('web.schedule_monthly')) # 戻り先を月間カレンダーに変更
 
     date_jpy = base_date.strftime('%Y年%m月%d日')
     
@@ -1835,5 +1835,5 @@ def student_logout():
     """学生専用ログアウト"""
     logout_user()
     flash("ログアウトしました。", "success")
-    return redirect(url_for('student_login'))
+    return redirect(url_for('web.student_login'))
 
