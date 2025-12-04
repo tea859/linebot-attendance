@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, get_flashed_messages, make_response
 from flask_login import login_required, current_user, login_user, logout_user
-from sqlalchemy import text
+from sqlalchemy import text, func
 from datetime import datetime, date, timedelta
 import calendar
 import csv
 import io
+from collections import OrderedDict
 from urllib.parse import quote
 from ..extensions import db
 from ..models import 学生, 授業, 時間割, 授業計画, 出席記録, 在室履歴, TimeTable, ReportRecord, 日別時間割, 教室
