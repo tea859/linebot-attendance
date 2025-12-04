@@ -66,6 +66,8 @@
                         <li><a href="{{ url_for('web.index') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-tachometer-alt w-6 text-blue-500"></i> ダッシュボード</a></li>
                         <li><a href="{{ url_for('web.attendance') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-clipboard-check w-6 text-indigo-500"></i> 出席登録</a></li>
                         <li><a href="{{ url_for('web.alerts') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-bell w-6 text-rose-500"></i> 連絡掲示板</a></li>
+                        <li><a href="{{ url_for('web.schedule') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-bell w-6 text-rose-500"></i> 時間割</a></li>
+                        <li><a href="{{ url_for('web.schedule_monthly') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-bell w-6 text-rose-500"></i> 月間時間割</a></li>
                         <li><a href="{{ url_for('web.manage_students') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-user-graduate w-6 text-slate-500"></i> 学生管理</a></li>
                          <li><a href="{{ url_for('web.manage_subjects') }}" class="block px-4 py-3 rounded-lg hover:bg-indigo-50 text-slate-700 font-bold"><i class="fas fa-book w-6 text-slate-500"></i> 授業管理</a></li>
                     {% endif %}
