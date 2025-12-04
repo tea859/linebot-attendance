@@ -137,6 +137,7 @@ class ReportRecord(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('学生.学生ID'), nullable=False)
     report_type = db.Column(db.String(10), nullable=False)
     reason = db.Column(db.String(500), nullable=True)
+    ai_analysis = db.Column(db.String(100), nullable=True) 
     report_date = db.Column(SQLDateTime, nullable=False, default=datetime.now)
     is_resolved = db.Column(db.Boolean, default=False)
     student = relationship("学生")
