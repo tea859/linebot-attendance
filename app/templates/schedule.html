@@ -210,7 +210,7 @@
                             {% set slot = schedule_grid[period][day_char] %}
                             {% set is_today = (slot.date_str.replace('/','-') == now_date_str) %}
                             
-                            <a href="{{ url_for('edit_daily_schedule', date=slot.date_query) }}" 
+                            <a href="{{ url_for('web.edit_daily_schedule', date=slot.date_query) }}" 
                                class="time-slot 
                                 {% if is_today %}today-col{% endif %} 
                                 {% if slot.is_exception %}exception-slot{% endif %}
