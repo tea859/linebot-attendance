@@ -18,6 +18,7 @@
                         {{ 'bg-rose-100 text-rose-600' if report.report_type == '欠席' else 'bg-amber-100 text-amber-600' }}">
                         <i class="fas {{ 'fa-user-times' if report.report_type == '欠席' else 'fa-running' }}"></i>
                     </div>
+                    
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <span class="font-bold text-lg text-slate-800">{{ student_name }}</span>
@@ -25,7 +26,14 @@
                                 {{ 'bg-rose-50 text-rose-600 border-rose-200' if report.report_type == '欠席' else 'bg-amber-50 text-amber-600 border-amber-200' }}">
                                 {{ report.report_type }}
                             </span>
-                        </div>
+                            
+                            {% if report.ai_analysis %}
+                                <span class="text-xs font-bold px-2 py-0.5 rounded border bg-indigo-50 text-indigo-600 border-indigo-200 flex items-center gap-1">
+                                    <i class="fas fa-robot"></i> {{ report.ai_analysis }}
+                                </span>
+                            {% endif %}
+                            </div>
+                        
                         <p class="text-slate-600 font-bold mb-2">理由: {{ report.reason }}</p>
                         <div class="text-xs text-slate-400">
                             <i class="far fa-clock mr-1"></i>{{ report.report_date.strftime('%Y/%m/%d %H:%M') }} 受信
