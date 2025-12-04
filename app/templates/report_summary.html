@@ -1,218 +1,83 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>授業別レポート</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-    
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 24px 24px;
-            color: #334155;
-        }
+{% extends "base.html" %}
 
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #e2e8f0;
-        }
+{% block title %}授業別レポート{% endblock %}
 
-        /* テーブルデザイン */
-        .report-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-        .report-table th {
-            background-color: #f1f5f9;
-            color: #64748b;
-            font-weight: 700;
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 2px solid #e2e8f0;
-            white-space: nowrap;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        .report-table td {
-            padding: 12px 16px;
-            border-bottom: 1px solid #f1f5f9;
-            vertical-align: middle;
-        }
-        .report-table tr:hover td {
-            background-color: #f8fafc;
-        }
-        
-        /* 危険行（出席率不足） */
-        .row-danger td {
-            background-color: #fef2f2; /* red-50 */
-        }
-        .row-danger:hover td {
-            background-color: #fee2e2; /* red-100 */
-        }
-
-        /* アニメーション */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
-    </style>
-</head>
-<body class="pb-20 pt-16">
-
-    <nav class="bg-white border-b border-slate-200 fixed top-0 inset-x-0 z-50 h-16 flex items-center shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-between items-center">
-            <a href="/" class="flex items-center gap-3 hover:opacity-80 transition">
-                <div class="bg-blue-600 text-white p-2 rounded-md flex items-center justify-center w-10 h-10 shadow-sm">
-                    <i class="fas fa-building text-xl"></i>
-                </div>
-                <span class="font-bold text-xl text-slate-800">Attendance System</span>
-            </a>
-
-            <a href="/" class="text-slate-500 hover:text-blue-600 transition flex items-center gap-2 font-medium text-sm">
-                <i class="fas fa-home"></i> ダッシュボードへ
-            </a>
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-end mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-700 flex items-center gap-2">
+                <i class="fas fa-chart-bar text-emerald-500"></i> 授業別出席レポート
+            </h2>
+            <p class="text-sm text-slate-500 mt-1">科目ごとの学生の出席状況を一覧表示します。</p>
         </div>
-    </nav>
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         
-        <header class="glass-card p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-4 animate-fade-in">
-            <div class="flex items-center gap-4">
-                <div class="bg-gradient-to-br from-indigo-500 to-violet-600 text-white p-3 rounded-xl shadow-lg">
-                    <i class="fas fa-chart-pie text-2xl"></i>
-                </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-800">授業別レポート</h1>
-                    <p class="text-slate-500 text-sm">科目ごとの出席状況を集計・分析します</p>
-                </div>
-            </div>
-            
-            <a href="/" class="group flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-indigo-600 transition">
-                <span class="group-hover:-translate-x-1 transition-transform">←</span> メインメニューに戻る
-            </a>
-        </header>
-
-        <div class="glass-card p-6 mb-8 animate-fade-in" style="animation-delay: 0.1s;">
-            <form method="GET" action="/report_summary" class="flex flex-col md:flex-row items-end gap-4">
-                <div class="flex-grow w-full">
-                    <label for="subject_key" class="block text-xs font-bold text-slate-500 uppercase mb-2">授業科目を選択</label>
-                    <div class="relative">
-                        <select name="subject_key" id="subject_key" required 
-                                class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition appearance-none">
-                            <option value="" disabled {% if not selected_subject_key %}selected{% endif %}>--- 授業を選択してください ---</option>
-                            {% for id, name, kiki in all_subjects %}
-                                {% set subject_key = kiki ~ '-' ~ id %}
-                                <option value="{{ subject_key }}" {% if subject_key == selected_subject_key %}selected{% endif %}>
-                                    第{{ kiki or '?' }}期：{{ name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                        <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-500">
-                            <i class="fas fa-chevron-down text-xs"></i>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="flex gap-3 w-full md:w-auto">
-                    <button type="submit" class="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition flex items-center justify-center gap-2">
-                        <i class="fas fa-search"></i> 表示
-                    </button>
-
-                    <a id="csvExportButton" href="#" onclick="return downloadCSV(event)"
-                       class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl shadow-md transition flex items-center justify-center gap-2">
-                        <i class="fas fa-file-csv"></i> CSV
-                    </a>
-                </div>
-            </form>
-        </div>
-
-        {% if report_data %}
-            
-            <div class="flex justify-between items-end mb-4 animate-fade-in" style="animation-delay: 0.2s;">
-                <h2 class="text-xl font-bold text-slate-700 flex items-center gap-2">
-                    <i class="fas fa-list-ul text-slate-400"></i> 集計結果
-                </h2>
-                <div class="text-sm font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                    実施回数: <span class="text-indigo-600 text-lg">{{ report_data[0].total_classes_so_far }}</span> 回
-                </div>
-            </div>
-            
-            <div class="glass-card overflow-hidden animate-fade-in" style="animation-delay: 0.3s;">
-                <div class="overflow-x-auto">
-                    <table class="report-table">
-                        <thead>
-                            <tr>
-                                <th class="w-32">学生ID</th>
-                                <th>学生名</th>
-                                <th class="w-24">出席率</th>
-                                <th class="w-24 text-center">出席</th>
-                                <th class="w-24 text-center">遅刻</th>
-                                <th class="w-24 text-center">欠席</th>
-                                <th class="w-24 text-center text-slate-400">その他</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for student in report_data %}
-                            <tr class="transition {% if student.total_classes_so_far > 0 and student.attendance_rate < 80 %}row-danger{% endif %}">
-                                <td class="font-mono text-slate-500 text-sm">{{ student.id }}</td>
-                                <td class="font-bold text-slate-700">{{ student.name }}</td>
-                                
-                                <td>
-                                    <span class="font-black text-lg
-                                        {% if student.attendance_rate >= 80 %}text-emerald-500
-                                        {% elif student.attendance_rate >= 50 %}text-amber-500
-                                        {% else %}text-rose-500{% endif %}">
-                                        {{ student.attendance_rate }}%
-                                    </span>
-                                </td>
-
-                                <td class="text-center font-bold text-emerald-600">{{ student.counts.出席 }}</td>
-                                <td class="text-center font-bold text-amber-600">{{ student.counts.遅刻 }}</td>
-                                <td class="text-center font-bold text-rose-600">{{ student.counts.欠席 }}</td>
-                                <td class="text-center text-slate-400 text-sm">{{ student.counts.その他 }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-        {% elif selected_subject_key %}
-            <div class="glass-card p-12 text-center border-dashed border-2 border-slate-300 animate-fade-in">
-                <div class="text-slate-300 text-6xl mb-4"><i class="fas fa-folder-open"></i></div>
-                <h3 class="text-xl font-bold text-slate-600 mb-2">データなし</h3>
-                <p class="text-slate-400">選択された授業のデータが見つかりませんでした。</p>
-            </div>
-        {% endif %}
-
+        <form method="GET" action="{{ url_for('web.report_summary') }}" class="flex gap-2">
+            <select name="subject_key" class="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-emerald-500 focus:border-emerald-500 block p-2.5 min-w-[200px]">
+                <option value="" disabled {{ 'selected' if not selected_subject_key }}>-- 科目を選択 --</option>
+                {% for row in all_subjects %}
+                    <option value="{{ row.学期 }}-{{ row.授業ID }}" {{ 'selected' if selected_subject_key == (row.学期 ~ '-' ~ row.授業ID) }}>
+                        第{{ row.学期 }}期 | {{ row.授業科目名 }}
+                    </option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="text-white bg-emerald-600 hover:bg-emerald-700 font-bold rounded-lg text-sm px-5 py-2.5 shadow transition">
+                表示
+            </button>
+        </form>
     </div>
 
-    <script>
-        function downloadCSV(event) {
-            const subjectSelect = document.getElementById('subject_key');
-            const selectedSubjectKey = subjectSelect.value;
-
-            if (!selectedSubjectKey) {
-                alert('⚠️ CSVをダウンロードするには、まず授業を選択してください。');
-                event.preventDefault(); 
-                return false;
-            }
-
-            const downloadLink = document.getElementById('csvExportButton');
-            downloadLink.href = `/export/report_summary?subject_key=${selectedSubjectKey}`;
-            
-            return true;
-        }
-    </script>
-</body>
-</html>
+    {% if report_data %}
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mb-6">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <span class="font-bold text-slate-600">現在までの総授業数: {{ report_data[0].total_classes_so_far }}回</span>
+                <a href="{{ url_for('web.export_report_summary', subject_key=selected_subject_key) }}" class="text-emerald-600 hover:text-emerald-700 text-sm font-bold flex items-center gap-1">
+                    <i class="fas fa-file-csv"></i> CSVダウンロード
+                </a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-white text-slate-500 border-b border-slate-200">
+                        <tr>
+                            <th class="px-6 py-3 font-bold">ID</th>
+                            <th class="px-6 py-3 font-bold">氏名</th>
+                            <th class="px-6 py-3 font-bold">出席率</th>
+                            <th class="px-6 py-3 font-bold text-center">出席</th>
+                            <th class="px-6 py-3 font-bold text-center">遅刻</th>
+                            <th class="px-6 py-3 font-bold text-center text-rose-500">欠席</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        {% for row in report_data %}
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="px-6 py-4 font-mono text-slate-500">{{ row.id }}</td>
+                            <td class="px-6 py-4 font-bold text-slate-700">{{ row.name }}</td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold {{ 'text-emerald-600' if row.attendance_rate >= 80 else 'text-rose-600' }}">{{ row.attendance_rate }}%</span>
+                                    <div class="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div class="h-full {{ 'bg-emerald-500' if row.attendance_rate >= 80 else 'bg-rose-500' }}" style="width: {{ row.attendance_rate }}%"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 text-center font-bold text-emerald-600">{{ row.counts['出席'] }}</td>
+                            <td class="px-6 py-4 text-center font-bold text-amber-600">{{ row.counts['遅刻'] }}</td>
+                            <td class="px-6 py-4 text-center font-bold text-rose-600">{{ row.counts['欠席'] }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        {% if selected_subject_key %}
+            <div class="text-center py-20 text-slate-400 font-bold">データがありません。</div>
+        {% else %}
+            <div class="text-center py-20 text-slate-400">
+                <i class="fas fa-hand-point-up text-4xl mb-4 text-slate-300"></i>
+                <p>上のメニューから科目を選択して表示ボタンを押してください。</p>
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
