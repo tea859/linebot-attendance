@@ -175,12 +175,12 @@ def attendance():
                            selected_kiki=selected_kiki, 
                            kikis=["1", "2", "3", "4"])
 
-# app.py
+# app/routes/web.py の schedule 関数をこれに置き換えてください
 
 @web_bp.route("/schedule")
 @login_required
 def schedule():
-    """(閲覧) 週間リアルタイム時間割表示 (修正版)"""
+    """(閲覧) 週間リアルタイム時間割表示 (編集リンク対応版)"""
     
     # 1. 表示する週の基準日を決定
     date_str = request.args.get('date')
@@ -211,7 +211,7 @@ def schedule():
             this_date = week_dates[idx]
             schedule_grid[j][yobi] = {
                 "subject": "空欄", "teacher": "", "room": "", 
-                "display_text": "", # 初期値は空文字に
+                "display_text": "", 
                 "is_empty": True,
                 "is_exception": False,
                 "date": this_date,
@@ -228,16 +228,9 @@ def schedule():
         # A. 授業計画を取得
         plan = 授業計画.query.get(date_db_str)
         
-        # ▼▼▼ 修正ポイント: 計画がない、または休日設定の場合はスキップ（空欄のまま） ▼▼▼
         if not plan or plan.授業曜日 == 0:
-            # 休日等の表示用テキストを入れるならここで
-            if plan and plan.備考:
-                 # 備考があれば全コマに表示してもいいが、うるさいのでスキップ
-                 pass
             continue
-        # ▲▲▲ 修正ここまで ▲▲▲
 
-        # 計画がある場合のみ以下を実行
         target_kiki = str(plan.期)
         target_yobi_code = plan.授業曜日
         target_yobi_str = YOBI_MAP_REVERSE.get(target_yobi_code)
@@ -301,17 +294,20 @@ def schedule():
                     "is_exception": True
                 })
 
+    # ▼▼▼ 追加: 編集権限チェック ▼▼▼
+    is_editable = not current_user.get_id().startswith('student-')
+
     return render_template("schedule.html", 
                            schedule_grid=schedule_grid, 
                            曜日順=順序, 
                            時限一覧=時限一覧,
-                           # selected_kiki は表示上の目安として、月曜日の計画があればそれを使う
                            selected_kiki=str(授業計画.query.get(week_dates[0].strftime('%Y/%m/%d')).期) if 授業計画.query.get(week_dates[0].strftime('%Y/%m/%d')) else "-", 
                            now_date_str=datetime.now().strftime('%Y-%m-%d'),
                            prev_week=prev_week,
                            next_week=next_week,
                            week_dates=week_dates,
-                           display_date=monday
+                           display_date=monday,
+                           is_editable=is_editable # ←これをテンプレートに渡す
                            )
     
 @web_bp.route("/edit_schedule", methods=["GET", "POST"])
