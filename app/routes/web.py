@@ -180,7 +180,7 @@ def attendance():
 @web_bp.route("/schedule")
 @login_required
 def schedule():
-    """(閲覧) 週間リアルタイム時間割表示 (授業計画対応版)"""
+    """(閲覧) 週間リアルタイム時間割表示 (修正版)"""
     
     # 1. 表示する週の基準日を決定
     date_str = request.args.get('date')
@@ -200,7 +200,7 @@ def schedule():
     prev_week = (monday - timedelta(days=7)).strftime('%Y-%m-%d')
     next_week = (monday + timedelta(days=7)).strftime('%Y-%m-%d')
 
-    # 3. グリッドの初期化（空箱を作る）
+    # 3. グリッドの初期化
     順序 = ["月", "火", "水", "木", "金"]
     時限一覧 = list(range(1, 6))
     schedule_grid = OrderedDict()
@@ -211,49 +211,44 @@ def schedule():
             this_date = week_dates[idx]
             schedule_grid[j][yobi] = {
                 "subject": "空欄", "teacher": "", "room": "", 
-                "display_text": "休憩/空欄", "is_empty": True,
+                "display_text": "", # 初期値は空文字に
+                "is_empty": True,
                 "is_exception": False,
                 "date": this_date,
                 "date_str": this_date.strftime('%Y/%m/%d'),
                 "date_query": this_date.strftime('%Y-%m-%d'),
-                "status_label": "" # 「月曜授業」などの注釈用
+                "status_label": ""
             }
 
-    # 4. 【重要】1日ずつ「授業計画」を確認しながらデータを埋める
+    # 4. データを埋める
     for col_idx, date_obj in enumerate(week_dates):
         date_db_str = date_obj.strftime('%Y/%m/%d')
-        physical_yobi_str = 順序[col_idx] # カレンダー上の曜日（列）
+        physical_yobi_str = 順序[col_idx] 
 
         # A. 授業計画を取得
         plan = 授業計画.query.get(date_db_str)
         
-        # 計画がある場合、その設定に従う
-        if plan:
-            if plan.授業曜日 == 0:
-                # 休日設定なら、この日は空欄のままスキップ
-                for j in 時限一覧:
-                    schedule_grid[j][physical_yobi_str]["display_text"] = "⛔️ 休校/休日"
-                    schedule_grid[j][physical_yobi_str]["status_label"] = plan.備考 or "休日"
-                continue
+        # ▼▼▼ 修正ポイント: 計画がない、または休日設定の場合はスキップ（空欄のまま） ▼▼▼
+        if not plan or plan.授業曜日 == 0:
+            # 休日等の表示用テキストを入れるならここで
+            if plan and plan.備考:
+                 # 備考があれば全コマに表示してもいいが、うるさいのでスキップ
+                 pass
+            continue
+        # ▲▲▲ 修正ここまで ▲▲▲
 
-            target_kiki = str(plan.期)
-            target_yobi_code = plan.授業曜日
-            target_yobi_str = YOBI_MAP_REVERSE.get(target_yobi_code) # 論理的な曜日（例: 金曜だけど'月'）
-            
-            # もし曜日振替があればラベルを表示
-            status_label = ""
-            if physical_yobi_str != target_yobi_str:
-                status_label = f"※{target_yobi_str}曜授業"
-            elif plan.備考:
-                status_label = f"※{plan.備考}"
-                
-        else:
-            # 計画がない場合はデフォルト（現在の期・カレンダー通りの曜日）
-            target_kiki = get_current_kiki()
-            target_yobi_str = physical_yobi_str
-            status_label = ""
+        # 計画がある場合のみ以下を実行
+        target_kiki = str(plan.期)
+        target_yobi_code = plan.授業曜日
+        target_yobi_str = YOBI_MAP_REVERSE.get(target_yobi_code)
+        
+        status_label = ""
+        if physical_yobi_str != target_yobi_str:
+            status_label = f"※{target_yobi_str}曜授業"
+        elif plan.備考:
+            status_label = f"※{plan.備考}"
 
-        # B. 決定した「期」と「曜日」でマスター時間割を取得
+        # B. マスター時間割を取得
         master_rows = db.session.query(
             時間割, 授業.授業科目名, 授業.担当教員, 教室.教室名
         ).outerjoin(授業, 時間割.授業ID == 授業.授業ID)\
@@ -278,7 +273,7 @@ def schedule():
                     "status_label": status_label
                 })
 
-        # C. 日別例外（変更）を上書き
+        # C. 日別例外を上書き
         exceptions = db.session.query(
             日別時間割, 授業.授業科目名, 授業.担当教員, 教室.教室名
         ).outerjoin(授業, 日別時間割.授業ID == 授業.授業ID)\
@@ -310,7 +305,8 @@ def schedule():
                            schedule_grid=schedule_grid, 
                            曜日順=順序, 
                            時限一覧=時限一覧,
-                           selected_kiki=get_current_kiki(), # 表示上の現在期
+                           # selected_kiki は表示上の目安として、月曜日の計画があればそれを使う
+                           selected_kiki=str(授業計画.query.get(week_dates[0].strftime('%Y/%m/%d')).期) if 授業計画.query.get(week_dates[0].strftime('%Y/%m/%d')) else "-", 
                            now_date_str=datetime.now().strftime('%Y-%m-%d'),
                            prev_week=prev_week,
                            next_week=next_week,
