@@ -40,7 +40,14 @@
                         {% for yobi in 曜日順 %}
                             {% set cell = schedule_grid[jigen][yobi] %}
                             {% set is_today = (cell.date_str == now_date_str) %}
-                            <td class="p-3 border-b border-r border-slate-200 h-32 align-top transition hover:bg-slate-50 {{ 'bg-indigo-50/30' if is_today else '' }}">
+                            
+                            <td class="p-3 border-b border-r border-slate-200 h-32 align-top transition hover:bg-slate-50 relative group {{ 'bg-indigo-50/30' if is_today else '' }}">
+                                
+                                {% if is_editable %}
+                                <a href="{{ url_for('web.edit_daily_schedule', date=cell.date_query) }}" class="absolute top-2 right-2 text-slate-300 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition z-10 p-1">
+                                    <i class="fas fa-pen"></i>
+                                </a>
+                                {% endif %}
                                 {% if cell.status_label %}
                                     <div class="text-[10px] bg-rose-100 text-rose-600 px-1 rounded inline-block mb-1">{{ cell.status_label }}</div>
                                 {% endif %}
